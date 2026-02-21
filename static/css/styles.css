@@ -1,17 +1,16 @@
 :root {
   --background-color: #fcfbf4;
   --highlight-color-primary: #ff7e70;
-  --highlight-color-dark: #ff7e70;
+  --highlight-color-dark: #c06a60;
   --highlight-color-light: #ff7e70;
   --spacing: 10px;
   --body-font: 'Lato', sans-serif;
   --header-font: 'Montserrat', sans-serif;
   --main-transition: 0.3s ease;
+  --black-color: #1b1b1b;
 }
 
-
-
-body{
+body {
   font-family: var(--body-font);
   background:#e5e5e5;
   width:90%;
@@ -39,8 +38,41 @@ header {
   max-width: 480px;
 }
 
+#pac-input::placeholder {
+  color: #777;
+}
 gmp-place-autocomplete {
   width: 100%;
+  background-color: white;
+}
+
+gmp-place-autocomplete::part(input) {
+  color: var(--black-color);
+}
+
+gmp-place-autocomplete::part(placeholder) {
+  color: #777;
+}
+
+gmp-place-autocomplete::part(listbox) {
+  background: var(--black-color);
+  color: #fff;
+}
+
+gmp-place-autocomplete::part(listbox-row),
+gmp-place-autocomplete::part(listbox-row-text),
+gmp-place-autocomplete::part(listbox-row-subtext) {
+  color: #fff;
+}
+
+gmp-place-autocomplete::part(listbox-row-hover),
+gmp-place-autocomplete::part(listbox-row-focused) {
+  background: #2a2a2a;
+}
+
+#pac-input::selection {
+  background: #ffd54f;
+  color: #000;
 }
 
 footer {
@@ -59,11 +91,11 @@ footer {
 
 a {
   text-decoration: none;
-  color: #000;
+  color: var(--highlight-color-primary);
 }
 
 a:hover {
-  color: var(--highlight-color-light);
+  color: var(--highlight-color-dark);
   transition: var(--main-transition);
 }
 
@@ -71,9 +103,6 @@ span {
   color: var(--highlight-color-primary)
 }
 
-section .impact {
-
-}
 .impact-body {
   max-width: 400px;
 }
@@ -91,24 +120,23 @@ ul p {
   color: grey;
 }
 
-/* results page */
-#results-map {
-  height: 500px;
-  width: 100%;
-  margin-top: 1em;
+.step-card {
+  padding: 10px;
+  border: 1px #000 solid;
+  border-radius: 20px;
+  width: 30%;
+  margin-bottom: 20px;
+  cursor: pointer;
+  display: flex;
 }
 
-.results-panel {
-  margin: 1em 0;
+.step-card h3, .step-card p, .step-card i {
+  text-align: center;
 }
 
-/* risk badge colors */
-.risk-badge {
-  padding: 4px 12px;
-  border-radius: 4px;
-  font-weight: bold;
-  color: white;
+.step-card i {
+  text-align: center;
+  align-items: center;
+  font-size: 36px;
+  color: var(--highlight-color-primary);
 }
-.risk-green  { background: #2ecc71; }
-.risk-yellow { background: #f1c40f; color: #333; }
-.risk-red    { background: #e74c3c; }
