@@ -60,13 +60,13 @@ def analyze():
         axis=1 # goes row by row in the dataset
     )
 
-    # prepare json results for the frontend
-    results = {
-        "nearby_streams": nearby_streams.__geo_interface__['features'],
-        "nearby_stormwater": nearby_stormwater.to_dict(orient="records"),
-        "impact_score": impact_score,
-        "risk_color": get_risk_color(nearest_distance, len(nearby_stormwater))
-    }
-
-    # sends python dictionary as json response to the frontend
-    return jsonify(results)
+    # render results page with impact score, risk color, and nearby features
+    return render_template(
+        "results.html",
+        lat=lat,
+        lon=lon,
+        impact_score=impact_score,
+        overall_risk=get_risk_color(nearest_distance, len(nearby_stormwater)),
+        nearby_streams=nearby_streams.__geo_interface__['features'],
+        nearby_stormwater=nearby_stormwater.to_dict(orient="records")
+    )

@@ -1,19 +1,52 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>SalmonShield — Results</title>
+{% extends "base.html" %}
 
-  <!--Imports leaflet library to build maps-->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
+{% block content %}
+    <h2>Results for {{ address }}</h2>
+    <p>Impact score: <span id="impact-score"></span></p>
+    <p>Overall risk: <span id="overall-risk"></span></p>
+
+    <div id="map"></div>
+
+    <ul>
+      {% for stream in nearby_streams %}
+        <li>
+          Stream: {{ stream.properties.name }} |
+          Species: {{ stream.properties.species }} |
+          Risk: {{ stream.properties.riskColor }}
+        </li>
+      {% endfor %}
+    </ul>
+
+    <ul>
+      {% for drain in nearby_stormwater %}
+        <li>Storm Drain ID: {{ drain.id }}</li>
+      {% endfor %}
+    </ul>
 
 
-  <!--Need to import any FONTS-->
-  <!--Import css -->
-  <link rel="stylesheet" href="../css/style.css"/>
-</head>
+    <script>
+      var map = L.map('map').setView([{{ lat }}, {{ lon }}], 13); // creates map at users location
 
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { // gets map tiles from OpenStreetMap
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(map); // adds tiles to map
 
-<body>
+      // user location
+      L.marker([{{ lat }}, {{ lon }}]).addTo(map).bindPopup("Your Location").openPopup(); // marks user location on map that says "Your Location" and automatically opens it when the map loads
+
+      // streams
+      var streams = {{ nearby_streams|tojson }}; // converts the nearby_streams data from Flask into a json array that can be used in JavaScript
+      streams.forEach(function(feature) { // loops through each stream in the streams array
+        var coords = feature.geometry.coordinates.map(c => [c[1], c[0]]); // converts the coordinates from [lon, lat] (used in geoJSON) to [lat, lon] for Leaflet
+        L.polyline(coords, {color: feature.properties.riskColor, weight: 5}).addTo(map); // draws a line on the map for each stream, gives it a color based on the riskColor property, and sets the line width to 5
+      });
+
+      // stormwater points
+      var drains = {{ nearby_stormwater|tojson }}; // converts the nearby_stormwater data from Flask into a json array that can be used in JavaScript
+      drains.forEach(function(drain) { // loops through each storm drain in the drains array
+        var [lon, lat] = drain.geometry.coordinates; // gets the coordinates of the storm drain and assigns them to lon and lat variables
+        L.circleMarker([lat, lon], {color: "blue", radius: 5}).addTo(map); // adds a blue circle marker to the map for each storm drain, with a radius of 5
+      });
+    </script>
+
+{% endblock %}
