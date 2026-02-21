@@ -30,7 +30,7 @@ salmonshield/
 results page = 
 1. run python app.py
 2. open the url ex. http://127.0.0.1:5000
-3. add /results?lat={whatever}&long={whatever}
+3. add /results?lat={whatever}&lon={whatever}
 
 
 http://127.0.0.1:5000/results?lat=40.78&lon=-74.0
