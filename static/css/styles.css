@@ -36,3 +36,9 @@ footer {
 #address-label {
   font-size: 12px;
 }
+
+.disclaimer {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
