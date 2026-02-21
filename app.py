@@ -5,7 +5,8 @@ from shapely.geometry import Point
 
 app = Flask(__name__)
 
-# load geoJSON datasets
+# load geoJSON datasets into GeoDataFrames using geopandas
+# GeoDataFrames are spreadsheets that include length, area, and other spatial attributes, and they allow for spatial operations like distance calculations
 streams = gpd.read_file("data/salmon_streams.geojson")
 stormwater = gpd.read_file("data/stormwater_discharge.geojson")
 
@@ -46,9 +47,7 @@ def analyze():
 
     # uploads risk color to the dataset for nearby streams
     nearby_streams['riskColor'] = nearby_streams.apply( # creates new riskColor column in dataset
-        lambda row: get_risk_color(row.geometry.distance(user_point_m), len(nearby_stormwater)), # in each row, calculates distance and number of storm drains
-        axis=1 # goes row by row in the dataset
-    )
+        lambda row: get_risk_color(row.geometry.distance(user_point_m), len(nearby_stormwater)), # lambda (anonymous) function that uses the get_risk_color function to determine the risk color and then uploads that to the riskColor column for each stream
 
     # prepare json results for the frontend
     results = {
