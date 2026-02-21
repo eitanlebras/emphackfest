@@ -43,10 +43,10 @@
         });
 
         // draw stormwater discharge points as circle markers
-        stormwater.forEach(function(item) {
-            // stormwater items have a geometry dict with coordinates
-            if (item.geometry && item.geometry.coordinates) {
-                var coords = item.geometry.coordinates;
+        stormwater.forEach(function(feature) {
+            // each feature is a GeoJSON object with geometry.coordinates
+            var coords = feature.geometry && feature.geometry.coordinates;
+            if (coords) {
                 L.circleMarker([coords[1], coords[0]], {
                     radius: 6,
                     color: "orange",
