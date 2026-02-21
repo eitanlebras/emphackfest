@@ -9,17 +9,27 @@ app = Flask(__name__)
 
 
 def geocode(address):
-    # Nominatim is OpenStreetMap's free geocoding API 
+    # Nominatim is OpenStreetMap's free geocoding API
     url = "https://nominatim.openstreetmap.org/search"
-    
-    # send the address as a query, ask for JSON back
-    r = requests.get(url, params={"q": address, "format": "json"}, headers={"User-Agent": "salmonshield"})
-    
-    # grab the first result (most relevant match)
-    result = r.json()[0]
-    
-    # return as lat, lon floats
-    return float(result["lat"]), float(result["lon"])
+
+    # try/except catches network errors or bad responses so the app does not crash
+    try:
+        # send the address as a query, ask for JSON back
+        r = requests.get(url, params={"q": address, "format": "json"}, headers={"User-Agent": "salmonshield"})
+        results = r.json()
+
+        # if the API returns an empty list, the address was not found
+        if not results:
+            return None
+
+        # grab the first result (most relevant match)
+        result = results[0]
+
+        # return as lat, lon floats
+        return float(result["lat"]), float(result["lon"])
+    except Exception:
+        # returns None on any failure (network error, bad JSON, etc.)
+        return None
 
 
 
@@ -40,23 +50,52 @@ stormwater = load_geo("data/storm_discharge.geojson")
 def home():
     return render_template("index.html")
 
+# route that takes an address string and returns lat/lon coordinates as JSON
+@app.route("/geocode", methods=["POST"])
+def geocode_address():
+    # get address from the form data
+    address = request.form.get("address")
+    # return 400 error if no address was sent
+    if not address:
+        return jsonify({"error": "No address provided"}), 400
+
+    # convert the address to coordinates using the geocode function
+    coords = geocode(address)
+    # return 404 if the address could not be found
+    if not coords:
+        return jsonify({"error": "Could not find that address"}), 404
+
+    return jsonify({"lat": coords[0], "lon": coords[1]})
+
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    # get user input and their address, convert to point geometry with latitude and longitude
-    lat = float(request.form["latitude"])
-    lon = float(request.form["longitude"])
+    # get latitude and longitude from the form, convert to floats
+    # try/except catches missing fields (KeyError) or non-numeric values (ValueError)
+    try:
+        lat = float(request.form["latitude"])
+        lon = float(request.form["longitude"])
+    except (KeyError, ValueError):
+        return jsonify({"error": "Invalid or missing coordinates"}), 400
+
     user_point = Point(lon, lat)
 
-     # converts distances to meters for more accurate calculations
-    streams_m = streams.to_crs(epsg=3857) # epsg:3857 is a common coordinate reference system that uses meters as units, which allows for accurate distance calculations (better than latitude and longitude)
-    stormwater_m = stormwater.to_crs(epsg=3857)
+    # converts distances to meters for more accurate calculations
     user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0] # epsg:4326 is the standard coordinate reference system for latitude and longitude, so we first create a GeoSeries (a series that stores Shapely geometric objects) with the user's point in that CRS and then convert it to epsg:3857 for distance calculations
+
+    # if both datasets are empty, return safe defaults instead of running calculations on empty data
+    if streams.empty and stormwater.empty:
+        return jsonify({"nearby_streams": [], "nearby_stormwater": [], "impact_score": 0, "risk_color": "green"})
+
+    # only convert to epsg:3857 if the dataset has data; calling to_crs on an empty dataframe can cause errors
+    streams_m = streams.to_crs(epsg=3857) if not streams.empty else streams # epsg:3857 is a common coordinate reference system that uses meters as units, which allows for accurate distance calculations (better than latitude and longitude)
+    stormwater_m = stormwater.to_crs(epsg=3857) if not stormwater.empty else stormwater
 
     # nearby features within 1 km
     # filters out streams and stormwater drains that are within 1 km of the user's location using boolean indexing
     # if the nearby stream is within 1000 meters, the data cell = true, otherwise false
-    nearby_streams = streams_m[streams_m.geometry.distance(user_point_m) < 1000] # within 1 km
-    nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000]
+    # only filter by distance if the dataset has data; empty datasets skip the distance check
+    nearby_streams = streams_m[streams_m.geometry.distance(user_point_m) < 1000] if not streams_m.empty else streams_m # within 1 km
+    nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000] if not stormwater_m.empty else stormwater_m
 
     # calculating impact score based on proximity and number of features
     nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000 # if it can't find any nearby streams, it defaults to 1km away
@@ -87,3 +126,7 @@ def analyze():
 
     # sends python dictionary as json response to the frontend
     return jsonify(results)
+
+# allows running the app directly with "python app.py" instead of "flask run"
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)
