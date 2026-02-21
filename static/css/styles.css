@@ -1,5 +1,19 @@
+body{
+  font-family:'Montserrat', sans-serif;
+  background:#e5e5e5;
+  width:90%;
+  margin:0 auto;
+  padding:2em 0 6em;
+}
+
 * {
   font-family: 'Montserrat', sans-serif;
+  box-sizing: border-box;
+  justify-content: space-between;
+}
+
+header {
+  border-bottom: 1px grey solid;
 }
 
 #map {
@@ -15,4 +29,6 @@ gmp-place-autocomplete {
   width: 100%;
 }
 
-
+footer {
+  border-top: 1px grey solid;
+}
