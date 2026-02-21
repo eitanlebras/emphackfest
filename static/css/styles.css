@@ -1,6 +1,6 @@
 #map {
-  height: 600px;
-  width: 100%;
+  height: 400px;
+  width: 25%;
 }
 
 #pac-container {
@@ -10,3 +10,5 @@
 gmp-place-autocomplete {
   width: 100%;
 }
+
+
