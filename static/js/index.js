@@ -31,12 +31,12 @@ function initMap() {
       return;
     }
 
-    // grab lat and lng from the selected place
-    const lat = place.location.lat();
-    const lng = place.location.lng();
-
-    // send user to the results page with coordinates in the URL
-    window.location.href = "/results?lat=" + lat + "&lon=" + lng;
+    mapEl.style.display = "block";
+    google.maps.event.trigger(map, "resize");
+    map.setCenter(place.location);
+    map.setZoom(17);
+    marker.setPosition(place.location);
+    marker.setVisible(true);
   });
 }
 
