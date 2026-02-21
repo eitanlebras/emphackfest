@@ -31,20 +31,12 @@ function initMap() {
       return;
     }
 
-    mapEl.style.display = "block";
-    google.maps.event.trigger(map, "resize");
-    map.setCenter(place.location);
-    map.setZoom(17);
+    // grab lat and lng from the selected place
+    const lat = place.location.lat();
+    const lng = place.location.lng();
 
-    marker.setPosition(place.location);
-    marker.setVisible(true);
-
-    const name = place.displayName || "";
-    const address = place.formattedAddress || "";
-    infowindow.setContent(
-      `<strong>${name}</strong><br>${address}`
-    );
-    infowindow.open(map, marker);
+    // send user to the results page with coordinates in the URL
+    window.location.href = "/results?lat=" + lat + "&lon=" + lng;
   });
 }
 

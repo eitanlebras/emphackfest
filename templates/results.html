@@ -1,52 +1,60 @@
 {% extends "base.html" %}
 
+{% block title %}Results — SalmonShield{% endblock %}
+
 {% block content %}
-    <h2>Results for {{ address }}</h2>
-    <p>Impact score: <span id="impact-score"></span></p>
-    <p>Overall risk: <span id="overall-risk"></span></p>
 
-    <div id="map"></div>
+    <!-- score panel -->
+    <div class="results-panel">
+        <h2>Impact Score: {{ impact_score }}/100</h2>
+        <p>Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
+    </div>
 
-    <ul>
-      {% for stream in nearby_streams %}
-        <li>
-          Stream: {{ stream.properties.name }} |
-          Species: {{ stream.properties.species }} |
-          Risk: {{ stream.properties.riskColor }}
-        </li>
-      {% endfor %}
-    </ul>
-
-    <ul>
-      {% for drain in nearby_stormwater %}
-        <li>Storm Drain ID: {{ drain.id }}</li>
-      {% endfor %}
-    </ul>
-
+    <!-- leaflet map fills this div -->
+    <div id="results-map"></div>
 
     <script>
-      var map = L.map('map').setView([{{ lat }}, {{ lon }}], 13); // creates map at users location
+        // data passed from Flask (already JSON)
+        var streams = {{ streams_json | safe }};
+        var stormwater = {{ stormwater_json | safe }};
+        var userLat = {{ lat }};
+        var userLon = {{ lon }};
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { // gets map tiles from OpenStreetMap
-        attribution: '© OpenStreetMap contributors'
-      }).addTo(map); // adds tiles to map
+        // create the map centered on the user's location
+        var map = L.map('results-map').setView([userLat, userLon], 14);
 
-      // user location
-      L.marker([{{ lat }}, {{ lon }}]).addTo(map).bindPopup("Your Location").openPopup(); // marks user location on map that says "Your Location" and automatically opens it when the map loads
+        // add the base tile layer (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
 
-      // streams
-      var streams = {{ nearby_streams|tojson }}; // converts the nearby_streams data from Flask into a json array that can be used in JavaScript
-      streams.forEach(function(feature) { // loops through each stream in the streams array
-        var coords = feature.geometry.coordinates.map(c => [c[1], c[0]]); // converts the coordinates from [lon, lat] (used in geoJSON) to [lat, lon] for Leaflet
-        L.polyline(coords, {color: feature.properties.riskColor, weight: 5}).addTo(map); // draws a line on the map for each stream, gives it a color based on the riskColor property, and sets the line width to 5
-      });
+        // mark the user's location
+        L.marker([userLat, userLon]).addTo(map)
+            .bindPopup("Your location").openPopup();
 
-      // stormwater points
-      var drains = {{ nearby_stormwater|tojson }}; // converts the nearby_stormwater data from Flask into a json array that can be used in JavaScript
-      drains.forEach(function(drain) { // loops through each storm drain in the drains array
-        var [lon, lat] = drain.geometry.coordinates; // gets the coordinates of the storm drain and assigns them to lon and lat variables
-        L.circleMarker([lat, lon], {color: "blue", radius: 5}).addTo(map); // adds a blue circle marker to the map for each storm drain, with a radius of 5
-      });
+        // draw each salmon stream, colored by risk
+        streams.forEach(function(feature) {
+            L.geoJSON(feature, {
+                style: function() {
+                    // use the riskColor we set in Python (red/yellow/green)
+                    return { color: feature.properties.riskColor || "blue", weight: 3 };
+                }
+            }).addTo(map);
+        });
+
+        // draw stormwater discharge points as circle markers
+        stormwater.forEach(function(item) {
+            // stormwater items have a geometry dict with coordinates
+            if (item.geometry && item.geometry.coordinates) {
+                var coords = item.geometry.coordinates;
+                L.circleMarker([coords[1], coords[0]], {
+                    radius: 6,
+                    color: "orange",
+                    fillColor: "orange",
+                    fillOpacity: 0.7
+                }).addTo(map).bindPopup("Stormwater discharge");
+            }
+        });
     </script>
 
 {% endblock %}
