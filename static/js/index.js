@@ -67,7 +67,9 @@ function initMap() {
       return;
     }
 
-    showLocation(place.location.lat(), place.location.lng(), place.displayName || "Selected place");
+    const lat = place.location.lat();
+    const lng = place.location.lng();
+    window.location.href = `/results?lat=${lat}&lon=${lng}`;
   });
 }
 
