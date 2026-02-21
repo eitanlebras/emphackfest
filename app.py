@@ -22,19 +22,19 @@ def analyze():
     user_point = Point(lon, lat)
 
      # converts distances to meters for more accurate calculations
-    streams_m = streams.to_crs(epsg=3857)
+    streams_m = streams.to_crs(epsg=3857) # epsg:3857 is a common coordinate reference system that uses meters as units, which allows for accurate distance calculations (better than latitude and longitude)
     stormwater_m = stormwater.to_crs(epsg=3857)
-    user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
+    user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0] # epsg:4326 is the standard coordinate reference system for latitude and longitude, so we first create a GeoSeries (a series that stores Shapely geometric objects) with the user's point in that CRS and then convert it to epsg:3857 for distance calculations
 
     # nearby features within 1 km
     # filters out streams and stormwater drains that are within 1 km of the user's location using boolean indexing
-    # if under 1000 meters = true, otherwise false
+    # if the nearby stream is within 1000 meters, the data cell = true, otherwise false
     nearby_streams = streams_m[streams_m.geometry.distance(user_point_m) < 1000] # within 1 km
     nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000]
 
     # calculating impact score based on proximity and number of features
     nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000 # if it can't find any nearby streams, it defaults to 1km away
-    impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10))) # score calculation so that the max is 100 and that the min is 0; the closer the nearest stream and the more stormwater drains, the higher the score
+    impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10))) # score calculation so that the max is 100 and that the min is 0; the closer the nearest stream and the more stormwater drains, the higher the score; first takes min of the raw score and 100 to ensure score cannot be over 100, then takes the max of that calculation and 0 to ensure score can't be less than 0
     
     # risk color based on distance and number of stormwater drains
     def get_risk_color(dist, drains):
