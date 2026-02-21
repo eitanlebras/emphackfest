@@ -15,6 +15,42 @@ function initMap() {
 
   const infowindow = new google.maps.InfoWindow();
   const marker = new google.maps.Marker({ map });
+  const useLocationBtn = document.getElementById("use-location");
+  const readout = document.getElementById("location-readout");
+
+  function showLocation(lat, lng, label = "Your location") {
+    mapEl.style.display = "block";
+    google.maps.event.trigger(map, "resize");
+    const pos = { lat, lng };
+    map.setCenter(pos);
+    map.setZoom(17);
+    marker.setPosition(pos);
+    marker.setVisible(true);
+    infowindow.setContent(`<strong>${label}</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    infowindow.open(map, marker);
+    if (readout) {
+      readout.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
+    }
+  }
+
+  if (useLocationBtn) {
+    useLocationBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        if (readout) readout.textContent = "Geolocation is not supported in this browser.";
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          showLocation(latitude, longitude, "Your current location");
+        },
+        (err) => {
+          if (readout) readout.textContent = `Location error: ${err.message}`;
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+  }
 
   autocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
     if (!placePrediction) {
@@ -31,12 +67,7 @@ function initMap() {
       return;
     }
 
-    mapEl.style.display = "block";
-    google.maps.event.trigger(map, "resize");
-    map.setCenter(place.location);
-    map.setZoom(17);
-    marker.setPosition(place.location);
-    marker.setVisible(true);
+    showLocation(place.location.lat(), place.location.lng(), place.displayName || "Selected place");
   });
 }
 
