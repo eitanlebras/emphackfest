@@ -10,6 +10,7 @@
         <p>
             Enter your location to see how your neighborhood is impacting nearby salmon streams
         </p>
+    
         <div class="enter-location">
             <label for="pac-container" id="address-label">Type your address</label>
             <div id="pac-container"></div>
@@ -57,6 +58,7 @@
       https://developers.google.com/maps/documentation/javascript/load-maps-js-api
       for more information.
       -->
+    
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8AfiCIiL8W1Q6CNiTGfFVxur20jb3eP8&callback=initMap&libraries=places&v=weekly" defer></script>
 

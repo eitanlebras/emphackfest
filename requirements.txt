@@ -3,3 +3,4 @@ geopandas
 leaflet
 shapely
 python-dotenv
+requests
