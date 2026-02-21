@@ -3,19 +3,6 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
-<div id="map" style="height: 600px;"></div>
-
-<script>
-  // Initialize the map
-  var map = L.map('map').setView([47.6, -122.3], 12); // default center
-
-  // Add Mapbox tiles
-  L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_token=YOUR_TOKEN', {
-    attribution: 'Map data &copy; OpenStreetMap contributors',
-    id: 'mapbox/streets-v11',
-    tileSize: 512,
-    zoomOffset: -1,
-    accessToken: 'YOUR_TOKEN'
-  }).addTo(map);
-</script>
+    <div id="map" style="height: 600px;"></div>
+    <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 {% endblock %}
