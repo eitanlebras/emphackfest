@@ -6,13 +6,14 @@
   --spacing: 10px;
   --body-font: 'Lato', sans-serif;
   --header-font: 'Montserrat', sans-serif;
-  --main-transition: 0.3s ease;
+  --main-transition: 0.3s ease-in-out;
   --black-color: #1b1b1b;
+  --grey-color: #777;
 }
 
 body {
   font-family: var(--body-font);
-  background:#e5e5e5;
+  background:var(--background-color);
   width:90%;
   margin:0 auto;
   padding:2em 0 6em;
@@ -38,8 +39,34 @@ header {
   max-width: 480px;
 }
 
+/* Legacy Places Autocomplete dropdown */
+.pac-container {
+  background: #fff !important;
+  color: #111 !important;
+  border: 1px solid #ddd;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12) !important;
+}
+
+.pac-item {
+  color: #111 !important;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-top: 1px solid #eee;
+  background: #fff !important;
+}
+
+.pac-item-query {
+  color: #111 !important;
+  font-weight: 600;
+}
+
+.pac-item:hover,
+.pac-item-selected {
+  background: #f5f5f5 !important;
+}
+
 #pac-input::placeholder {
-  color: #777;
+  color: var(--grey-color);
 }
 gmp-place-autocomplete {
   width: 100%;
@@ -51,7 +78,22 @@ gmp-place-autocomplete::part(input) {
 }
 
 gmp-place-autocomplete::part(placeholder) {
-  color: #777;
+  color: var(--grey-color);
+}
+
+gmp-place-autocomplete::part(input):focus {
+  outline: none;
+  box-shadow: none;
+}
+
+gmp-place-autocomplete:focus-within {
+  outline: none;
+  box-shadow: none;
+}
+
+gmp-place-autocomplete::part(container) {
+  box-shadow: none;
+  outline: none;
 }
 
 gmp-place-autocomplete::part(listbox) {
@@ -72,7 +114,7 @@ gmp-place-autocomplete::part(listbox-row-focused) {
 
 #pac-input::selection {
   background: #ffd54f;
-  color: #000;
+  color: var(--black-color);
 }
 
 footer {
@@ -84,10 +126,30 @@ footer {
 }
 
 .disclaimer {
-  align-items: center;
   justify-content: center;
   text-align: center;
+  margin-top: 8px;
 }
+
+.enter-location {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.enter-location #address-label {
+  align-self: flex-start;
+}
+
+.enter-location input,
+gmp-place-autocomplete,
+gmp-place-autocomplete::part(container),
+gmp-place-autocomplete::part(input) {
+  width: 200px;
+  align-items: left;
+}
+
 
 a {
   text-decoration: none;
@@ -122,21 +184,49 @@ ul p {
 
 .step-card {
   padding: 10px;
-  border: 1px #000 solid;
-  border-radius: 20px;
-  width: 30%;
+  border: 1px var(--black-color) solid;
+  border-radius: 10px;
+  width: 260px;
   margin-bottom: 20px;
   cursor: pointer;
   display: flex;
+  flex-direction: column;
+}
+
+.step-card:hover {
+  background-color: rgba(192, 106, 96, 0.085);
+  transition: var(--main-transition);
+  transform: scaleX(0.95);
 }
 
 .step-card h3, .step-card p, .step-card i {
   text-align: center;
+  margin: 0 auto;
 }
 
 .step-card i {
-  text-align: center;
-  align-items: center;
-  font-size: 36px;
+  display: flex;
+  font-size: 24px;
   color: var(--highlight-color-primary);
+  padding-left: 10px;
+  margin-bottom: 10px;
+}
+
+section#impact {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 60px;
+}
+
+section#impact .left-part {
+  flex: 1;
+  min-width: 0;
+}
+
+section#impact .right-part {
+  flex: 0 0 100px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
