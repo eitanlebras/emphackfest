@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, jsonify
 import geopandas as gpd
 from shapely.geometry import Point
 import os
+import json
 import requests
 
 app = Flask(__name__)
@@ -67,65 +68,94 @@ def geocode_address():
 
     return jsonify({"lat": coords[0], "lon": coords[1]})
 
+# risk color based on distance and number of stormwater drains
+def get_risk_color(dist, drains):
+    if drains >= 5 or dist < 200:
+        return "red"
+    elif drains >= 2:
+        return "yellow"
+    else:
+        return "green"
+
+
+# runs the analysis for a given lat/lon, returns a dictionary of results
+def run_analysis(lat, lon):
+    # make a point from the coordinates
+    user_point = Point(lon, lat)
+
+    # convert to meters so we can measure distances accurately
+    user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
+
+    # if no data loaded, return empty defaults
+    if streams.empty and stormwater.empty:
+        return {"nearby_streams": [], "nearby_stormwater": [], "impact_score": 0, "risk_color": "green"}
+
+    # convert datasets to meters (only if they have data)
+    streams_m = streams.to_crs(epsg=3857) if not streams.empty else streams
+    stormwater_m = stormwater.to_crs(epsg=3857) if not stormwater.empty else stormwater
+
+    # find streams and stormwater within 1 km
+    nearby_streams = streams_m[streams_m.geometry.distance(user_point_m) < 1000] if not streams_m.empty else streams_m
+    nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000] if not stormwater_m.empty else stormwater_m
+
+    # distance to the closest stream (default 1km if none found)
+    nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000
+
+    # impact score: closer streams + more stormwater drains = higher score (0-100)
+    impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10)))
+
+    # add risk color to each stream row
+    nearby_streams = nearby_streams.copy()
+    drain_count = len(nearby_stormwater)
+    nearby_streams['riskColor'] = [
+        get_risk_color(geom.distance(user_point_m), drain_count)
+        for geom in nearby_streams.geometry
+    ]
+
+    # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
+    nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
+
+    return {
+        "nearby_streams": nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else [],
+        "nearby_stormwater": nearby_stormwater.to_crs(epsg=4326).to_dict(orient="records") if not nearby_stormwater.empty else [],
+        "impact_score": impact_score,
+        "risk_color": get_risk_color(nearest_distance, len(nearby_stormwater))
+    }
+
+
+# API endpoint — returns JSON (kept for any future use)
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    # get latitude and longitude from the form, convert to floats
-    # try/except catches missing fields (KeyError) or non-numeric values (ValueError)
     try:
         lat = float(request.form["latitude"])
         lon = float(request.form["longitude"])
     except (KeyError, ValueError):
         return jsonify({"error": "Invalid or missing coordinates"}), 400
 
-    user_point = Point(lon, lat)
+    return jsonify(run_analysis(lat, lon))
 
-    # converts distances to meters for more accurate calculations
-    user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0] # epsg:4326 is the standard coordinate reference system for latitude and longitude, so we first create a GeoSeries (a series that stores Shapely geometric objects) with the user's point in that CRS and then convert it to epsg:3857 for distance calculations
 
-    # if both datasets are empty, return safe defaults instead of running calculations on empty data
-    if streams.empty and stormwater.empty:
-        return jsonify({"nearby_streams": [], "nearby_stormwater": [], "impact_score": 0, "risk_color": "green"})
+# results page — runs analysis and renders the HTML template
+@app.route("/results")
+def results():
+    try:
+        lat = float(request.args.get("lat"))
+        lon = float(request.args.get("lon"))
+    except (TypeError, ValueError):
+        return "Missing or invalid lat/lon", 400
 
-    # only convert to epsg:3857 if the dataset has data; calling to_crs on an empty dataframe can cause errors
-    streams_m = streams.to_crs(epsg=3857) if not streams.empty else streams # epsg:3857 is a common coordinate reference system that uses meters as units, which allows for accurate distance calculations (better than latitude and longitude)
-    stormwater_m = stormwater.to_crs(epsg=3857) if not stormwater.empty else stormwater
+    # run the analysis
+    data = run_analysis(lat, lon)
 
-    # nearby features within 1 km
-    # filters out streams and stormwater drains that are within 1 km of the user's location using boolean indexing
-    # if the nearby stream is within 1000 meters, the data cell = true, otherwise false
-    # only filter by distance if the dataset has data; empty datasets skip the distance check
-    nearby_streams = streams_m[streams_m.geometry.distance(user_point_m) < 1000] if not streams_m.empty else streams_m # within 1 km
-    nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000] if not stormwater_m.empty else stormwater_m
-
-    # calculating impact score based on proximity and number of features
-    nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000 # if it can't find any nearby streams, it defaults to 1km away
-    impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10))) # score calculation so that the max is 100 and that the min is 0; the closer the nearest stream and the more stormwater drains, the higher the score; first takes min of the raw score and 100 to ensure score cannot be over 100, then takes the max of that calculation and 0 to ensure score can't be less than 0
-    
-    # risk color based on distance and number of stormwater drains
-    def get_risk_color(dist, drains):
-        if drains >= 5 or dist < 200:
-            return "red"
-        elif drains >= 2:
-            return "yellow"
-        else:
-            return "green"
-
-    # uploads risk color to the dataset for nearby streams
-    nearby_streams['riskColor'] = nearby_streams.apply( # creates new riskColor column in dataset
-        lambda row: get_risk_color(row.geometry.distance(user_point_m), len(nearby_stormwater)), # lambda (anonymous) function that uses the get_risk_color function to determine the risk color and then uploads that to the riskColor column for each stream
-        axis=1 # goes row by row in the dataset
+    # pass everything to the template
+    return render_template("results.html",
+        lat=lat,
+        lon=lon,
+        streams_json=json.dumps(data["nearby_streams"]),
+        stormwater_json=json.dumps(data["nearby_stormwater"]),
+        impact_score=data["impact_score"],
+        risk_color=data["risk_color"]
     )
-
-    # prepare json results for the frontend
-    results = {
-        "nearby_streams": nearby_streams.__geo_interface__['features'],
-        "nearby_stormwater": nearby_stormwater.to_dict(orient="records"),
-        "impact_score": impact_score,
-        "risk_color": get_risk_color(nearest_distance, len(nearby_stormwater))
-    }
-
-    # sends python dictionary as json response to the frontend
-    return jsonify(results)
 
 # allows running the app directly with "python app.py" instead of "flask run"
 if __name__ == "__main__":
