@@ -5,16 +5,18 @@
 {% block content %}
     <div class="hero">
         <h1 class="main-text">
-            See how your street affects salmon
+            See how your street <br>
+            <span>affects salmon</span>
         </h1>
         <p>
             Enter your location to see how your neighborhood is impacting nearby salmon streams
         </p>
     
         <div class="enter-location">
-            <label for="pac-container" id="address-label">Type your address</label>
+            <label for="pac-container" id="address-label">Type your address (<button type="button" id="use-location"><i class="fa-solid fa-map-pin"></i>Use my location</button>)</label>
             <div id="pac-container"></div>
             <p class="disclaimer">We don't store your data. <a href="#">Privacy Policy</a></p>
+            <p class="location-readout" id="location-readout"></p>
         </div>
     </div>
     <div id="map"></div>
