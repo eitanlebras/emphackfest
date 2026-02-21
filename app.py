@@ -108,7 +108,7 @@ def run_analysis(lat, lon):
     nearby_streams = nearby_streams.copy()
     drain_count = len(nearby_stormwater)
     nearby_streams['riskColor'] = [
-        score_to_color(max(0, min(100, int((1 / (geom.distance(user_point_m)/100 + 1)) * 50 + drain_count * 10))))
+        get_risk_color(geom.distance(user_point_m), drain_count)
         for geom in nearby_streams.geometry
     ]
 
