@@ -108,8 +108,8 @@ def run_analysis(lat, lon):
     nearby_streams = nearby_streams.copy()
     drain_count = len(nearby_stormwater)
     nearby_streams['riskColor'] = [
-        get_risk_color(geom.distance(user_point_m), drain_count)
-        for geom in nearby_streams.geometry
+        nearby_streams = nearby_streams.copy()
+        nearby_streams['riskColor'] = score_to_color(impact_score)
     ]
 
     # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
