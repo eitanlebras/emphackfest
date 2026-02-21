@@ -36,13 +36,6 @@ function initMap() {
     map.setCenter(place.location);
     map.setZoom(17);
 
-    // store lat and lng as global variables so map.js can access them
-    window.userLat = place.location.lat();
-    window.userLng = place.location.lng();
-
-    // call function from map.js
-    analyzeAddress(window.userLat, window.userLng);
-
     marker.setPosition(place.location);
     marker.setVisible(true);
 
