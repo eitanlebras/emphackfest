@@ -1,23 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{% block title %}SalmonShield{% endblock %}</title>
-        <link rel="stylesheet" href="{{ url_for('css', filename='styles.css') }}">
-    </head>
-    <body>
-        <header>
-            <h1>SalmonShield</h1>
-        </header>
+{% extends "base.html" %}
 
-        <main>
-            {% block content %}{% endblock %}
-        </main>
+{% block title %}Home{% endblock %}
 
-        <footer>
-            <p>&copy; 2026 SalmonShield. All rights reserved.</p>
-            <p>Contact: <a href="mailto:contact@salmonshield.com">contact@salmonshield.com</a></p>
-        </footer>
-    </body>
-</html>
+{% block content %}
+    <div id="map" style="height: 600px;"></div>
+    <script src="{{ url_for('js', filename='js/map.js') }}"></script>
+{% endblock %}
