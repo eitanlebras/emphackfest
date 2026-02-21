@@ -25,4 +25,3 @@ salmonshield/
 └── templates/
     ├── index.html
     ├── results.html
-    └── methods.html
