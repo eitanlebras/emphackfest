@@ -104,11 +104,11 @@ def run_analysis(lat, lon):
     # impact score: closer streams + more stormwater drains = higher score (0-100)
     impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10)))
 
-    # add risk color to each stream row
+    # color each stream by its own distance-based risk
     nearby_streams = nearby_streams.copy()
     drain_count = len(nearby_stormwater)
     nearby_streams['riskColor'] = [
-        get_risk_color(geom.distance(user_point_m), drain_count)
+        score_to_color(max(0, min(100, int((1 / (geom.distance(user_point_m)/100 + 1)) * 50 + drain_count * 10))))
         for geom in nearby_streams.geometry
     ]
 
@@ -117,7 +117,8 @@ def run_analysis(lat, lon):
 
     return {
         "nearby_streams": nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else [],
-        "nearby_stormwater": nearby_stormwater.to_crs(epsg=4326).to_dict(orient="records") if not nearby_stormwater.empty else [],
+        # convert stormwater to geojson features so coordinates serialize properly
+        "nearby_stormwater": json.loads(nearby_stormwater.to_crs(epsg=4326).to_json())["features"] if not nearby_stormwater.empty else [],
         "impact_score": impact_score,
         "risk_color": score_to_color(impact_score)
     }
