@@ -90,3 +90,25 @@ ul p {
   font-size: 12px;
   color: grey;
 }
+
+/* results page */
+#results-map {
+  height: 500px;
+  width: 100%;
+  margin-top: 1em;
+}
+
+.results-panel {
+  margin: 1em 0;
+}
+
+/* risk badge colors */
+.risk-badge {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  color: white;
+}
+.risk-green  { background: #2ecc71; }
+.risk-yellow { background: #f1c40f; color: #333; }
+.risk-red    { background: #e74c3c; }
