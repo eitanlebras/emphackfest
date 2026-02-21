@@ -116,7 +116,6 @@ def analyze():
         axis=1 # goes row by row in the dataset
     )
 
-<<<<<<< HEAD
     # render results page with impact score, risk color, and nearby features
     return render_template(
         "results.html",
@@ -127,19 +126,7 @@ def analyze():
         nearby_streams=nearby_streams.__geo_interface__['features'],
         nearby_stormwater=nearby_stormwater.to_dict(orient="records")
     )
-=======
-    # prepare json results for the frontend
-    results = {
-        "nearby_streams": nearby_streams.__geo_interface__['features'],
-        "nearby_stormwater": nearby_stormwater.to_dict(orient="records"),
-        "impact_score": impact_score,
-        "risk_color": get_risk_color(nearest_distance, len(nearby_stormwater))
-    }
-
-    # sends python dictionary as json response to the frontend
-    return jsonify(results)
 
 # allows running the app directly with "python app.py" instead of "flask run"
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
->>>>>>> 618e10b10743f3322a7b4db005d7542ce82b772c
