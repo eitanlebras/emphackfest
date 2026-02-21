@@ -1,1 +1,12 @@
+#map {
+  height: 600px;
+  width: 100%;
+}
 
+#pac-container {
+  max-width: 480px;
+}
+
+gmp-place-autocomplete {
+  width: 100%;
+}
