@@ -2,12 +2,22 @@
 from flask import Flask, render_template, request, jsonify
 import geopandas as gpd
 from shapely.geometry import Point
+import os
 
 app = Flask(__name__)
 
 # load geoJSON datasets
-streams = gpd.read_file("data/salmon_streams.geojson")
-stormwater = gpd.read_file("data/stormwater_discharge.geojson")
+def load_geo(path, crs="EPSG:4326"):
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return gpd.GeoDataFrame(geometry=[], crs=crs)
+    try:
+        return gpd.read_file(path)
+    except Exception as e:
+        print(f"Warning: failed to read {path}: {e}")
+        return gpd.GeoDataFrame(geometry=[], crs=crs)
+
+streams = load_geo("data/salmon_streams.geojson")
+stormwater = load_geo("data/storm_discharge.geojson")
 
 @app.route("/")
 def home():
