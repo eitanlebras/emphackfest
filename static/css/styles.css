@@ -32,3 +32,7 @@ gmp-place-autocomplete {
 footer {
   border-top: 1px grey solid;
 }
+
+#address-label {
+  font-size: 12px;
+}
