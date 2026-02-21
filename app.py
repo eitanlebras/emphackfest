@@ -3,8 +3,25 @@ from flask import Flask, render_template, request, jsonify
 import geopandas as gpd
 from shapely.geometry import Point
 import os
+import requests
 
 app = Flask(__name__)
+
+
+def geocode(address):
+    # Nominatim is OpenStreetMap's free geocoding API 
+    url = "https://nominatim.openstreetmap.org/search"
+    
+    # send the address as a query, ask for JSON back
+    r = requests.get(url, params={"q": address, "format": "json"}, headers={"User-Agent": "salmonshield"})
+    
+    # grab the first result (most relevant match)
+    result = r.json()[0]
+    
+    # return as lat, lon floats
+    return float(result["lat"]), float(result["lon"])
+
+
 
 # load geoJSON datasets
 def load_geo(path, crs="EPSG:4326"):
