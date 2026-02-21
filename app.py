@@ -7,8 +7,17 @@ import os
 app = Flask(__name__)
 
 # load geoJSON datasets
-streams = gpd.read_file("data/salmon_streams.geojson")
-stormwater = gpd.read_file("data/stormwater_discharge.geojson")
+def load_geo(path, crs="EPSG:4326"):
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return gpd.GeoDataFrame(geometry=[], crs=crs)
+    try:
+        return gpd.read_file(path)
+    except Exception as e:
+        print(f"Warning: failed to read {path}: {e}")
+        return gpd.GeoDataFrame(geometry=[], crs=crs)
+
+streams = load_geo("data/salmon_streams.geojson")
+stormwater = load_geo("data/storm_discharge.geojson")
 
 @app.route("/")
 def home():
@@ -48,6 +57,8 @@ def analyze():
     # uploads risk color to the dataset for nearby streams
     nearby_streams['riskColor'] = nearby_streams.apply( # creates new riskColor column in dataset
         lambda row: get_risk_color(row.geometry.distance(user_point_m), len(nearby_stormwater)), # lambda (anonymous) function that uses the get_risk_color function to determine the risk color and then uploads that to the riskColor column for each stream
+        axis=1 # goes row by row in the dataset
+    )
 
     # prepare json results for the frontend
     results = {
