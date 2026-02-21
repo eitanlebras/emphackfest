@@ -2,7 +2,8 @@
 // parameter when you first load the API. For example:
 // <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places">
 function initMap() {
-  const map = new google.maps.Map(document.getElementById("map"), {
+  const mapEl = document.getElementById("map");
+  const map = new google.maps.Map(mapEl, {
     center: { lat: 40.749933, lng: -73.98633 },
     zoom: 13,
     mapTypeControl: false,
@@ -30,15 +31,10 @@ function initMap() {
       return;
     }
 
+    mapEl.style.display = "block";
+    google.maps.event.trigger(map, "resize");
     map.setCenter(place.location);
     map.setZoom(17);
-
-    // store lat and lng as global variables so map.js can access them
-    window.userLat = place.location.lat();
-    window.userLng = place.location.lng();
-
-    // call function from map.js
-    analyzeAddress(window.userLat, window.userLng);
 
     marker.setPosition(place.location);
     marker.setVisible(true);
