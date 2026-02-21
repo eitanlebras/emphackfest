@@ -255,3 +255,31 @@ section#impact .right-part {
   flex-direction: column;
   align-items: stretch;
 }
+
+/* results page */
+.results-panel {
+  max-width: 900px;
+  margin: 30px auto 20px;
+  text-align: center;
+}
+
+#results-map {
+  width: 90%;
+  height: 500px;
+  max-width: 1100px;
+  margin: 0 auto 40px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+}
+
+/* risk badge colors */
+.risk-badge {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.risk-red { background: #e74c3c; }
+.risk-yellow { background: #f39c12; color: #1b1b1b; }
+.risk-green { background: #27ae60; }
