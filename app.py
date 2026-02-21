@@ -106,11 +106,7 @@ def run_analysis(lat, lon):
 
     # add risk color to each stream row
     nearby_streams = nearby_streams.copy()
-    drain_count = len(nearby_stormwater)
-    nearby_streams['riskColor'] = [
-        nearby_streams = nearby_streams.copy()
-        nearby_streams['riskColor'] = score_to_color(impact_score)
-    ]
+    nearby_streams['riskColor'] = score_to_color(impact_score)
 
     # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
