@@ -72,7 +72,7 @@ def geocode_address():
 def score_to_color(score):
     if score >= 70:
         return "red"
-    elif score >= 30:
+    elif 70 > score >= 30:
         return "yellow"
     else:
         return "green"
