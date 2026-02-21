@@ -1,5 +1,18 @@
+:root {
+  --background-color: #fcfbf4;
+  --highlight-color-primary: #ff7e70;
+  --highlight-color-dark: #ff7e70;
+  --highlight-color-light: #ff7e70;
+  --spacing: 10px;
+  --body-font: 'Lato', sans-serif;
+  --header-font: 'Montserrat', sans-serif;
+  --main-transition: 0.3s ease;
+}
+
+
+
 body{
-  font-family:'Montserrat', sans-serif;
+  font-family: var(--body-font);
   background:#e5e5e5;
   width:90%;
   margin:0 auto;
@@ -7,7 +20,7 @@ body{
 }
 
 * {
-  font-family: 'Montserrat', sans-serif;
+  font-family: var(--body-font);
   box-sizing: border-box;
   justify-content: space-between;
 }
@@ -17,8 +30,9 @@ header {
 }
 
 #map {
+  display: none;
   height: 400px;
-  width: 25%;
+  width: 100%;
 }
 
 #pac-container {
@@ -33,7 +47,7 @@ footer {
   border-top: 1px grey solid;
 }
 
-#address-label {
+#address-label, .disclaimer {
   font-size: 12px;
 }
 
@@ -41,4 +55,38 @@ footer {
   align-items: center;
   justify-content: center;
   text-align: center;
+}
+
+a {
+  text-decoration: none;
+  color: #000;
+}
+
+a:hover {
+  color: var(--highlight-color-light);
+  transition: var(--main-transition);
+}
+
+span {
+  color: var(--highlight-color-primary)
+}
+
+section .impact {
+
+}
+.impact-body {
+  max-width: 400px;
+}
+
+h1 {
+  font-size: 50px;
+}
+
+li {
+  list-style-type: none;
+}
+
+ul p {
+  font-size: 12px;
+  color: grey;
 }
