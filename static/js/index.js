@@ -19,18 +19,8 @@ function initMap() {
   const readout = document.getElementById("location-readout");
 
   function showLocation(lat, lng, label = "Your location") {
-    mapEl.style.display = "block";
-    google.maps.event.trigger(map, "resize");
-    const pos = { lat, lng };
-    map.setCenter(pos);
-    map.setZoom(17);
-    marker.setPosition(pos);
-    marker.setVisible(true);
-    infowindow.setContent(`<strong>${label}</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-    infowindow.open(map, marker);
-    if (readout) {
-      readout.textContent = `Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}`;
-    }
+    // redirect to results page with coordinates
+    window.location.href = `/results?lat=${lat}&lon=${lng}`;
   }
 
   if (useLocationBtn) {
