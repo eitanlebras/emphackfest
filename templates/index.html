@@ -3,6 +3,17 @@
 {% block title %}Home{% endblock %}
 
 {% block content %}
+    <div class="hero">
+        <h1 class="main-text">
+            See how your street affects salmon
+        </h1>
+        <p>
+            Enter your location to see how your neighborhood is impacting nearby salmon streams
+        </p>
+        <div class="enter-location">
+            <label for="input"></label>
+        </div>
+    </div>
     <div id="map" style="height: 600px;"></div>
     <script src="{{ url_for('static', filename='js/map.js') }}"></script>
 {% endblock %}
