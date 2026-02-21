@@ -68,11 +68,11 @@ def geocode_address():
 
     return jsonify({"lat": coords[0], "lon": coords[1]})
 
-# risk color based on distance and number of stormwater drains
-def get_risk_color(dist, drains):
-    if drains >= 5 or dist < 200:
+# risk color based on score
+def score_to_color(score):
+    if score >= 70:
         return "red"
-    elif drains >= 2:
+    elif score >= 30:
         return "yellow"
     else:
         return "green"
@@ -119,7 +119,7 @@ def run_analysis(lat, lon):
         "nearby_streams": nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else [],
         "nearby_stormwater": nearby_stormwater.to_crs(epsg=4326).to_dict(orient="records") if not nearby_stormwater.empty else [],
         "impact_score": impact_score,
-        "risk_color": get_risk_color(nearest_distance, len(nearby_stormwater))
+        "risk_color": score_to_color(impact_score)
     }
 
 
