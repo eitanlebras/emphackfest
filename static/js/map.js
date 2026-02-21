@@ -10,21 +10,8 @@ L.tileLayer('https://api.mapbox.com/styles/v1/{id}/tiles/{z}/{x}/{y}?access_toke
   accessToken: 'YOUR_TOKEN'
 }).addTo(map);
 
-// Analyze a user inputed address in three step process: 
-// 1) Geocode address into lat/lng using OpenStreetMap Nominatim
-// 2) Move map + drop marker
-// 3) Call Flask backend /analyze to compute nearest stream + score
-async function analyzeAdress(address) {
-  //Geocoding requestL
-  //Nominatim returns a list of possible matches in JSON format
-  const geo = await fetch(
-    `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(address)}&format=json`
-  );
-  const geoData = await geo.json();
-
-  // take the first match (assumed best match) and extract coords)
-  const lag = parseFloat(geoData[0].lat);
-  const lng = parseFloat(geoData[0].lon);
+// Analyze a user inputed address:
+async function analyzeAdress(lat, lng) {
 
   //Recenter the map and zoom in
   map.setView([lat,lng], 14);
