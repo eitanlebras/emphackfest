@@ -2,7 +2,7 @@
 import os
 os.environ["OGR_GEOJSON_MAX_OBJ_SIZE"] = "0"  # allow reading very large GeoJSON files
 from dotenv import load_dotenv
-load_dotenv()  # load API keys from .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))  # load API keys from .env
 from flask import Flask, render_template, request, jsonify, send_file
 import geopandas as gpd        # geospatial dataframes (like pandas but for maps)
 from shapely.geometry import Point, box  # geometric shapes for spatial queries
@@ -457,7 +457,7 @@ _openai_client = None
 def _get_openai():
     global _openai_client
     if _openai_client is None:
-        _openai_client = openai.OpenAI()
+        _openai_client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
     return _openai_client
 
 # build a prompt with real data and ask GPT for actionable suggestions

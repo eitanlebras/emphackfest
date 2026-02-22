@@ -4,6 +4,8 @@
 
 {% block content %}
 
+    <a href="/" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back</a>
+
     <!-- score panel -->
     <div class="results-panel">
         {% if nearest_stream_dist_km %}
@@ -48,6 +50,21 @@
         .layer-panel h4 { margin: 0 0 4px; font-size: 13px; }
         .layer-panel label { display: block; cursor: pointer; }
         .layer-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+
+        /* back button */
+        .back-btn { display: inline-flex; align-items: center; gap: 8px; color: #555; text-decoration: none; font-size: 13px; font-weight: 600; padding: 8px 16px; border-radius: 20px; background: #f0f0f0; transition: background 0.15s, color 0.15s; margin-bottom: 16px; }
+        .back-btn:hover { background: #e0e0e0; color: #1b1b1b; }
+
+        /* FAQ accordion */
+        #faq-section { max-width: 860px; margin: 32px auto 0; padding: 0 16px 48px; }
+        #faq-section > h3 { font-size: 16px; margin-bottom: 16px; color: #1b1b1b; }
+        .faq-item { border: 1px solid #e8e8e8; border-radius: 10px; margin-bottom: 8px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; }
+        .faq-item summary { padding: 14px 18px; font-size: 14px; font-weight: 600; color: #1b1b1b; cursor: pointer; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none; }
+        .faq-item summary::-webkit-details-marker { display: none; }
+        .faq-item summary::after { content: '\f107'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #aaa; font-size: 13px; transition: transform 0.2s; }
+        .faq-item[open] > summary::after { transform: rotate(180deg); }
+        .faq-item[open] > summary { border-bottom: 1px solid #f0f0f0; color: #2a9d8f; }
+        .faq-item p { margin: 0; padding: 14px 18px; font-size: 13px; color: #555; line-height: 1.7; }
 
         /* GPT suggestions section below the map */
         .suggestions-card { padding: 16px 0; margin: 20px 0; }
@@ -595,7 +612,6 @@
 
     <!-- nearby streams survey data panel -->
     <div id="stream-survey-section">
-        <h3>Nearby Salmon Streams</h3>
         <div id="stream-survey-panel"></div>
     </div>
 
@@ -617,16 +633,6 @@
         .stream-stat { font-size: 13px; color: #444; }
     </style>
 
-    <div class="enter-location">
-            <label for="pac-container" id="address-label">Type your address</label>
-            <div id="pac-container"></div>
-            <p class="discalimer">We don't store your data. <a href="#">Privacy Policy</a></p>
-    </div>
-
-    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
-    <!-- Google Maps JS for address autocomplete -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8AfiCIiL8W1Q6CNiTGfFVxur20jb3eP8&callback=initMap&libraries=places&v=weekly" defer></script>
-
     <!-- AI-generated suggestions for this location -->
     {% if suggestions %}
     <div class="suggestions-card">
@@ -646,45 +652,44 @@
     </div>
     {% endif %}
 
-        <!-- FAQ section -->
-        <div>
-        <h3>How do we calculate the danger score?</h3>
-        <p>Our danger score is calculated based on a the weighted sum of several factors including proximity to heavy traffic roadways, impervious surface area, storm drain density, watershed characteristics, and water quality metrics.</p>
-    </div>
+    <!-- FAQ section -->
+    <div id="faq-section">
+        <h3>Frequently Asked Questions</h3>
 
-    <div>
-        <h3>What is an impervious surface?</h3>
-        <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
-    </div>
+        <details class="faq-item">
+            <summary>How do we calculate the danger score?</summary>
+            <p>Our danger score is calculated based on a weighted sum of several factors including proximity to heavy traffic roadways, impervious surface area, storm drain density, watershed characteristics, and water quality metrics.</p>
+        </details>
 
-    <div>
-        <h3>What are storm discharge drains?</h3>
-        <p>Storm dischargedrains are part of the urban drainage system that collects and channels surface water runoff from streets, parking lots, and other impervious surfaces to nearby streams or rivers. When these drains are not properly managed, they can carry pollutants directly into salmon habitats.</p>
-    </div>
+        <details class="faq-item">
+            <summary>What is an impervious surface?</summary>
+            <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
+        </details>
 
-    <div>
-        <h3>What is a watershed?</h3>
-        <p>A watershed is an area of land that drains to a common water body, such as a stream or river. Watersheds are important in salmon habitat because they define the boundaries of the drainage area that contributes water and pollutants to a stream.</p>
-    </div>
+        <details class="faq-item">
+            <summary>What are storm discharge drains?</summary>
+            <p>Storm discharge drains are part of the urban drainage system that collects and channels surface water runoff from streets, parking lots, and other impervious surfaces to nearby streams or rivers. When these drains are not properly managed, they can carry pollutants directly into salmon habitats.</p>
+        </details>
 
-    <div>
-        <h3>What is an impervious surface?</h3>
-        <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
-    </div>
+        <details class="faq-item">
+            <summary>What is a watershed?</summary>
+            <p>A watershed is an area of land that drains to a common water body, such as a stream or river. Watersheds are important in salmon habitat because they define the boundaries of the drainage area that contributes water and pollutants to a stream.</p>
+        </details>
 
-    <div>
-        <h3>How do heavy traffic roadways affect salmon habitats?</h3>
-        <p>Heavy traffic roadways contribute to salmon habitat degradation through increased impervious surfaces, which lead to higher volumes of runoff and pollutants entering nearby streams. The runoff carries oil, heavy metals, and other contaminants that can be toxic to salmon and their spawning grounds.</p>
-    </div>
+        <details class="faq-item">
+            <summary>How do heavy traffic roadways affect salmon habitats?</summary>
+            <p>Heavy traffic roadways contribute to salmon habitat degradation through increased impervious surfaces, which lead to higher volumes of runoff and pollutants entering nearby streams. The runoff carries oil, heavy metals, and other contaminants that can be toxic to salmon and their spawning grounds.</p>
+        </details>
 
-    <div>
-        <h3>How does rainfall affect salmon habitats?</h3>
-        <p>Heavy rainfall can increase the volume and speed of runoff entering streams, carrying pollutants and sediments that can degrade salmon habitats. Excessive runoff can cause erosion, alter stream flow patterns, and introduce harmful substances that are toxic to salmon and their spawning grounds.</p>
-    </div>
+        <details class="faq-item">
+            <summary>How does rainfall affect salmon habitats?</summary>
+            <p>Heavy rainfall can increase the volume and speed of runoff entering streams, carrying pollutants and sediments that can degrade salmon habitats. Excessive runoff can cause erosion, alter stream flow patterns, and introduce harmful substances that are toxic to salmon and their spawning grounds.</p>
+        </details>
 
-    <div>
-        <h3>How does water quality affect salmon habitats?</h3>
-        <p>Water quality is crucial for salmon survival. Pollutants such as heavy metals, pesticides, and excess nutrients can accumulate in streams and rivers, leading to habitat degradation. Poor water quality can reduce oxygen levels, increase toxicity, and disrupt the food chain that salmon depend on.</p>
+        <details class="faq-item">
+            <summary>How does water quality affect salmon habitats?</summary>
+            <p>Water quality is crucial for salmon survival. Pollutants such as heavy metals, pesticides, and excess nutrients can accumulate in streams and rivers, leading to habitat degradation. Poor water quality can reduce oxygen levels, increase toxicity, and disrupt the food chain that salmon depend on.</p>
+        </details>
     </div>
 
 {% endblock %}
