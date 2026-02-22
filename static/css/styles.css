@@ -280,6 +280,6 @@ section#impact .right-part {
   color: #fff;
 }
 
-.risk-red { background: #e74c3c; }
-.risk-yellow { background: #f39c12; color: #1b1b1b; }
-.risk-green { background: #27ae60; }
+.risk-red { background: #e63946; }
+.risk-yellow { background: #fb8500; color: #1b1b1b; }
+.risk-green { background: #2a9d8f; }
