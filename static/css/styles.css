@@ -296,3 +296,11 @@ section#impact .right-part {
   font-weight: 500;
   color: #664d03;
 }
+
+/* style leaflet popups as cards */
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.15);
+  padding: 4px;
+}
+.leaflet-popup-content { margin: 10px 12px; }
