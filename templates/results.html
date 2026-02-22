@@ -88,12 +88,14 @@
         };
         legend.addTo(map);
 
-        // --- draw each salmon stream ---
+        // all salmon & trout species found in this dataset
+        var salmonSpecies = "Chinook Salmon, Coho Salmon, Chum Salmon, Pink Salmon, Sockeye Salmon";
+
+        // --- draw each salmon stream (already merged by LLID) ---
         streams.forEach(function(feature) {
             var risk = feature.properties.riskColor || "green";
             var color = riskColors[risk] || "#2a9d8f";
             var name = feature.properties.LLID_STRM_NAME || "Salmon stream";
-            var species = feature.properties.SPECIES || "Unknown";
 
             // find the midpoint of the stream to calculate distance
             var coords = feature.geometry.coordinates;
@@ -104,7 +106,7 @@
             var popup =
                 '<div class="popup-card">' +
                 '  <h3>' + name + '</h3>' +
-                '  <p>Species: <strong>' + species + '</strong></p>' +
+                '  <p>Species: <strong>' + salmonSpecies + '</strong></p>' +
                 '  <p>Risk: <span class="risk-badge risk-' + risk + '">' + riskLabels[risk] + '</span></p>' +
                 '  <div class="divider"></div>' +
                 '  <p>Distance: <strong>' + dist + ' m</strong> from your location</p>' +

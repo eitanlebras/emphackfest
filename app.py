@@ -144,9 +144,34 @@ def run_analysis(lat, lon):
 
     # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
+    raw_features = nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else []
+
+    # group features by stream ID (LLID) so each stream is drawn once
+    # combine all species and keep the longest geometry to show full extent
+    seen = {}
+    merged_features = []
+    for f in raw_features:
+        llid = f["properties"].get("LLID", "")
+        sp = f["properties"].get("SPECIES", "")
+        coord_count = len(f["geometry"]["coordinates"])
+
+        if llid in seen:
+            # add species to existing entry
+            if sp and sp not in seen[llid]["properties"]["allSpecies"]:
+                seen[llid]["properties"]["allSpecies"].append(sp)
+            # keep the longest geometry so the full stream is visible
+            if coord_count > len(seen[llid]["geometry"]["coordinates"]):
+                seen[llid]["geometry"] = f["geometry"]
+        else:
+            # first time seeing this stream — start a new merged feature
+            props = dict(f["properties"])
+            props["allSpecies"] = [sp] if sp else []
+            f["properties"] = props
+            seen[llid] = f
+            merged_features.append(f)
 
     return {
-        "nearby_streams": nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else [],
+        "nearby_streams": merged_features,
         # convert stormwater to geojson (default=str handles Timestamp columns)
         "nearby_stormwater": json.loads(nearby_stormwater.to_crs(epsg=4326).to_json(default=str))["features"] if not nearby_stormwater.empty else [],
         "impact_score": impact_score,
