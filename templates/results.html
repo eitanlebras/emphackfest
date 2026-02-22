@@ -200,6 +200,10 @@
             rebuildLegend();
         });
 
+        // --- async-fetched legend values (persist across rebuildLegend calls) ---
+        var roadDensityHtml = '<em>loading\u2026</em>';
+        var weatherHtml = '<em>loading\u2026</em>';
+
         // --- dynamic legend (top-right) — rebuilds when layers toggle ---
         var legendDiv = null;
         var legendControl = L.control({ position: "topright" });
@@ -247,17 +251,21 @@
                         (waterQuality.total_impairments !== 1 ? 's' : '') + ' detected</span>';
             }
 
-            // road density placeholder (filled by Overpass fetch)
+            // road density (value persists across rebuilds)
             html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
-                    '<span id="road-density-entry" style="font-size:11px;color:#555;">' +
-                    'Road density (500m): <em>loading\u2026</em></span>';
+                    '<span style="font-size:11px;color:#555;">Road density (500m): ' + roadDensityHtml + '</span>';
+
+            // weather forecast (value persists across rebuilds)
+            html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
+                    '<span style="font-size:11px;color:#555;">Precipitation forecast:<br>' + weatherHtml + '</span>';
+
             legendDiv.innerHTML = html;
         }
 
         // --- fetch road density from Overpass API (OSM) within 500m ---
         (function() {
-            var RADIUS = 500; // metres
-            var AREA_KM2 = Math.PI * (RADIUS / 1000) * (RADIUS / 1000); // π × r²
+            var RADIUS = 500;
+            var AREA_KM2 = Math.PI * (RADIUS / 1000) * (RADIUS / 1000);
             var query = '[out:json][timeout:15];(way["highway"](around:' + RADIUS + ',' +
                         userLat + ',' + userLon + '););out geom;';
             fetch('https://overpass-api.de/api/interpreter', {
@@ -278,28 +286,50 @@
                         );
                     }
                 });
-                // if no road data found, show unavailable
                 if (elements.length === 0) {
-                    var entry = document.getElementById('road-density-entry');
-                    if (entry) entry.textContent = 'Road density: unavailable';
-                    return;
+                    roadDensityHtml = 'unavailable';
+                } else {
+                    var density = (totalM / 1000) / AREA_KM2;
+                    var label, color;
+                    if (density < 5)       { label = 'Low';      color = '#2a9d8f'; }
+                    else if (density < 15) { label = 'Moderate'; color = '#fb8500'; }
+                    else                   { label = 'High';     color = '#e63946'; }
+                    roadDensityHtml = '<strong style="color:' + color + '">' + label + '</strong>' +
+                                      ' \u2014 ' + density.toFixed(1) + ' km/km\u00B2';
                 }
-                var density = (totalM / 1000) / AREA_KM2;
-                var label, color;
-                if (density < 5)       { label = 'Low';      color = '#2a9d8f'; }
-                else if (density < 15) { label = 'Moderate'; color = '#fb8500'; }
-                else                   { label = 'High';     color = '#e63946'; }
-                var entry = document.getElementById('road-density-entry');
-                if (entry) {
-                    entry.innerHTML =
-                        'Road density (500m):<br>' +
-                        '<strong style="color:' + color + '">' + label + '</strong>' +
-                        ' &mdash; ' + density.toFixed(1) + ' km/km\u00B2';
-                }
+                rebuildLegend();
             })
             .catch(function() {
-                var entry = document.getElementById('road-density-entry');
-                if (entry) entry.textContent = 'Road density: unavailable';
+                roadDensityHtml = 'unavailable';
+                rebuildLegend();
+            });
+        })();
+
+        // --- fetch 3-day precipitation forecast from Open-Meteo (no API key needed) ---
+        (function() {
+            var url = 'https://api.open-meteo.com/v1/forecast' +
+                      '?latitude=' + userLat + '&longitude=' + userLon +
+                      '&daily=precipitation_sum,precipitation_probability_max' +
+                      '&precipitation_unit=inch&timezone=auto&forecast_days=3';
+            fetch(url)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var days  = data.daily.time;
+                var precip = data.daily.precipitation_sum;
+                var prob   = data.daily.precipitation_probability_max;
+                var dayNames = ['Today', 'Tomorrow', days[2] ? days[2].slice(5) : 'Day 3'];
+                var rows = '';
+                for (var i = 0; i < 3; i++) {
+                    var p = (precip[i] || 0).toFixed(2);
+                    var pct = prob[i] != null ? prob[i] : '–';
+                    rows += dayNames[i] + ': <strong>' + pct + '% chance</strong>, ' + p + ' in<br>';
+                }
+                weatherHtml = rows;
+                rebuildLegend();
+            })
+            .catch(function() {
+                weatherHtml = 'unavailable';
+                rebuildLegend();
             });
         })();
 
