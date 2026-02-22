@@ -1,11 +1,17 @@
 # import statements
 import os
 os.environ["OGR_GEOJSON_MAX_OBJ_SIZE"] = "0"
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 import geopandas as gpd
 from shapely.geometry import Point, box
 import json
 import requests
+import rasterio
+from rasterio.warp import transform_bounds, reproject, Resampling, calculate_default_transform
+from rasterio.transform import from_bounds
+import numpy as np
+from io import BytesIO
+from PIL import Image
 
 app = Flask(__name__)
 
@@ -257,6 +263,65 @@ def results():
         nearest_stream_dist_km=data["nearest_stream_dist_km"],
         water_quality_json=json.dumps(data["water_quality"])
     )
+
+# --- NLCD impervious surface tile endpoint ---
+# path to the 2024 fractional impervious surface GeoTIFF
+NLCD_TIFF = "data/NLCD_b812e669-a6c9-44dd-a6b7-127872e98e5c/Annual_NLCD_FctImp_2024_CU_C1V1_b812e669-a6c9-44dd-a6b7-127872e98e5c.tiff"
+
+# color ramp: 0% impervious = transparent, 100% = dark red
+# matches standard NLCD impervious palette
+def impervious_to_rgba(band):
+    """Convert a uint8 impervious % array to an RGBA image array."""
+    h, w = band.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    mask = band > 0  # only color pixels with some impervious cover
+    pct = band[mask].astype(float) / 100.0
+    # gradient: green(low) -> yellow(mid) -> red(high)
+    rgba[mask, 0] = (pct * 255).astype(np.uint8)           # R increases
+    rgba[mask, 1] = ((1 - pct) * 200).astype(np.uint8)     # G decreases
+    rgba[mask, 2] = 30                                       # B constant
+    rgba[mask, 3] = (60 + pct * 140).astype(np.uint8)       # alpha: 60-200
+    return rgba
+
+@app.route("/nlcd_tile")
+def nlcd_tile():
+    """Serve a reprojected PNG overlay of NLCD impervious surface.
+    Query params: west, south, east, north (EPSG:4326), width, height in px.
+    Reprojects from the source Albers CRS to EPSG:4326 so it aligns with Leaflet.
+    """
+    try:
+        west = float(request.args["west"])
+        south = float(request.args["south"])
+        east = float(request.args["east"])
+        north = float(request.args["north"])
+        width = int(request.args.get("width", 512))
+        height = int(request.args.get("height", 512))
+    except (KeyError, ValueError):
+        return "Missing bbox params", 400
+
+    # convert 4326 bbox to 3857 (Web Mercator) — matches Leaflet's internal projection
+    merc_bounds = transform_bounds("EPSG:4326", "EPSG:3857", west, south, east, north)
+    dst_transform = from_bounds(*merc_bounds, width, height)
+    dst_array = np.zeros((height, width), dtype=np.uint8)
+
+    with rasterio.open(NLCD_TIFF) as src:
+        # reproject source raster into 3857 grid so pixels align with Leaflet
+        reproject(
+            source=rasterio.band(src, 1),
+            destination=dst_array,
+            dst_transform=dst_transform,
+            dst_crs="EPSG:3857",
+            resampling=Resampling.bilinear,
+        )
+
+    # convert to colored RGBA PNG
+    rgba = impervious_to_rgba(dst_array)
+    img = Image.fromarray(rgba, "RGBA")
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
+
 
 # allows running the app directly with "python app.py" instead of "flask run"
 if __name__ == "__main__":

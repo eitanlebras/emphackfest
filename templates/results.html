@@ -6,7 +6,7 @@
 
     <!-- score panel -->
     <div class="results-panel">
-        <h2>Impact Score: {{ impact_score }}/100</h2>
+        <h2>Danger Score: {{ impact_score }}/100</h2>
         <p>Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
     </div>
 
@@ -19,6 +19,45 @@
 
     <!-- leaflet map fills this div -->
     <div id="results-map"></div>
+
+    <div>
+        <h3>How do we calculate the danger score?</h3>
+    </div>
+
+    <div>
+        <h3>What is an impervious surface?</h3>
+        <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
+    </div>
+
+    <div>
+        <h3>What are storm discharge drains?</h3>
+        <p>Storm dischargedrains are part of the urban drainage system that collects and channels surface water runoff from streets, parking lots, and other impervious surfaces to nearby streams or rivers. When these drains are not properly managed, they can carry pollutants directly into salmon habitats.</p>
+    </div>
+
+    <div>
+        <h3>What is a watershed?</h3>
+        <p>A watershed is an area of land that drains to a common water body, such as a stream or river. Watersheds are important in salmon habitat because they define the boundaries of the drainage area that contributes water and pollutants to a stream.</p>
+    </div>
+
+    <div>
+        <h3>What is an impervious surface?</h3>
+        <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
+    </div>
+
+    <div>
+        <h3>How do heavy traffic roadways affect salmon habitats?</h3>
+        <p>Heavy traffic roadways contribute to salmon habitat degradation through increased impervious surfaces, which lead to higher volumes of runoff and pollutants entering nearby streams. The runoff carries oil, heavy metals, and other contaminants that can be toxic to salmon and their spawning grounds.</p>
+    </div>
+
+    <div>
+        <h3>How does rainfall affect salmon habitats?</h3>
+        <p>Heavy rainfall can increase the volume and speed of runoff entering streams, carrying pollutants and sediments that can degrade salmon habitats. Excessive runoff can cause erosion, alter stream flow patterns, and introduce harmful substances that are toxic to salmon and their spawning grounds.</p>
+    </div>
+
+    <div>
+        <h3>How does water quality affect salmon habitats?</h3>
+        <p>Water quality is crucial for salmon survival. Pollutants such as heavy metals, pesticides, and excess nutrients can accumulate in streams and rivers, leading to habitat degradation. Poor water quality can reduce oxygen levels, increase toxicity, and disrupt the food chain that salmon depend on.</p>
+    </div>
 
     <!-- inline styles for popup cards and legend -->
     <style>
@@ -37,6 +76,16 @@
         .map-legend h4 { margin: 0 0 6px; font-size: 13px; }
         .map-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
         .map-legend .line { width: 18px; height: 4px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+
+        /* layer filter panel */
+        .layer-panel { background: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-family: 'Lato', sans-serif; font-size: 12px; line-height: 2; }
+        .layer-panel h4 { margin: 0 0 4px; font-size: 13px; }
+        .layer-panel label { display: block; cursor: pointer; }
+        .layer-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+
+        /* NLCD gradient bar in legend */
+        .nlcd-gradient { width: 100px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 6px;
+            background: linear-gradient(to right, rgba(0,200,30,0.4), rgba(200,100,30,0.7), rgba(255,0,30,0.9)); }
     </style>
 
     <script>
@@ -72,8 +121,9 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // --- draw watershed boundaries (behind everything else) ---
+        // --- watershed layer (togglable) ---
         var wsPalette = ["#264653","#2a9d8f","#e9c46a","#f4a261","#e76f51","#6a4c93","#1982c4","#8ac926"];
+        var watershedGroup = L.layerGroup(); // holds all watershed polygons
         watershedFeatures.forEach(function(feature, i) {
             var color = wsPalette[i % wsPalette.length];
             var name = feature.properties.Name || "Unknown";
@@ -82,8 +132,7 @@
 
             var layer = L.geoJSON(feature, {
                 style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.15, dashArray: "6 4" }
-            }).addTo(map);
-
+            });
             layer.bindPopup(
                 '<div class="popup-card">' +
                 '  <h3>' + name + ' Watershed</h3>' +
@@ -91,9 +140,32 @@
                 '  <p>Area: <strong>' + area + '</strong></p>' +
                 '</div>'
             );
-
             layer.on("mouseover", function() { layer.setStyle({ fillOpacity: 0.3, weight: 3 }); });
             layer.on("mouseout", function() { layer.setStyle({ fillOpacity: 0.15, weight: 2 }); });
+            watershedGroup.addLayer(layer);
+        });
+
+        // --- NLCD impervious surface overlay (togglable) ---
+        var nlcdOverlay = null; // will hold the current ImageOverlay
+
+        // fetch and render the NLCD tile for the current map view
+        function loadNlcdOverlay() {
+            var b = map.getBounds();
+            var size = map.getSize();
+            var url = "/nlcd_tile?west=" + b.getWest() + "&south=" + b.getSouth() +
+                      "&east=" + b.getEast() + "&north=" + b.getNorth() +
+                      "&width=" + size.x + "&height=" + size.y;
+            // remove old overlay before adding new one
+            if (nlcdOverlay) map.removeLayer(nlcdOverlay);
+            nlcdOverlay = L.imageOverlay(url, b, { opacity: 0.7, interactive: false });
+            nlcdOverlay.addTo(map);
+        }
+
+        var nlcdEnabled = false; // tracks checkbox state
+
+        // reload NLCD when map moves (only if enabled)
+        map.on("moveend", function() {
+            if (nlcdEnabled) loadNlcdOverlay();
         });
 
         // mark the user's location
