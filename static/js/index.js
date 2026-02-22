@@ -3,18 +3,22 @@
 // <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places">
 function initMap() {
   const mapEl = document.getElementById("map");
-  const map = new google.maps.Map(mapEl, {
-    center: { lat: 40.749933, lng: -73.98633 },
-    zoom: 13,
-    mapTypeControl: false,
-  });
+
+  let map, marker;
+  if (mapEl) {
+    map = new google.maps.Map(mapEl, {
+      center: { lat: 40.749933, lng: -73.98633 },
+      zoom: 13,
+      mapTypeControl: false,
+    });
+    marker = new google.maps.Marker({ map });
+  }
 
   const pacContainer = document.getElementById("pac-container");
   const autocomplete = new google.maps.places.PlaceAutocompleteElement();
   pacContainer.replaceChildren(autocomplete);
 
   const infowindow = new google.maps.InfoWindow();
-  const marker = new google.maps.Marker({ map });
   const useLocationBtn = document.getElementById("use-location");
   const readout = document.getElementById("location-readout");
 

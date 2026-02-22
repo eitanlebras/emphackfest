@@ -48,6 +48,7 @@ def load_geo(path, crs="EPSG:4326"):
 streams = load_geo("data/salmon_streams.geojson")
 stormwater = load_geo("data/storm_discharge.geojson")
 watersheds = load_geo("data/watershed_boundaries.geojson")
+water_quality = load_geo("data/water_quality_pollutants.geojson")
 
 @app.route("/")
 def home():
@@ -188,6 +189,24 @@ def run_analysis(lat, lon):
             cols = [c for c in ["Name", "HUC12", "AreaSqKm", "geometry"] if c in hits_simple.columns]
             nearby_watersheds = json.loads(hits_simple[cols].to_json(default=str))["features"]
 
+    # --- water quality: find the census tract(s) intersecting a ~500m buffer ---
+    wq_data = None
+    if not water_quality.empty:
+        buf_deg = 0.0045  # ~500 m in degrees latitude
+        bbox = box(lon - buf_deg, lat - buf_deg, lon + buf_deg, lat + buf_deg)
+        hits = water_quality[water_quality.intersects(bbox)]
+        if not hits.empty:
+            # prefer the tract that actually contains the point; fall back to bbox hits
+            containing = hits[hits.contains(user_point)]
+            tracts = containing if not containing.empty else hits
+            total_impairments = int(tracts["TotalUniqueImpairments"].sum())
+            max_rank = int(tracts["Water_Quality_Rank"].max())
+            wq_data = {
+                "total_impairments": total_impairments,
+                "max_rank": max_rank,
+                "tract_count": len(tracts)
+            }
+
     return {
         "nearby_streams": merged_features,
         "nearby_stormwater": _geodf_to_features(nearby_stormwater.to_crs(epsg=4326)) if not nearby_stormwater.empty else [],
@@ -196,7 +215,8 @@ def run_analysis(lat, lon):
         "risk_color": score_to_color(impact_score),
         # nearest stream info (only set when no streams are within 1 km)
         "nearest_stream_point": nearest_stream_point,
-        "nearest_stream_dist_km": nearest_stream_dist_km
+        "nearest_stream_dist_km": nearest_stream_dist_km,
+        "water_quality": wq_data
     }
 
 
@@ -234,7 +254,8 @@ def results():
         impact_score=data["impact_score"],
         risk_color=data["risk_color"],
         nearest_stream_point=json.dumps(data["nearest_stream_point"]),
-        nearest_stream_dist_km=data["nearest_stream_dist_km"]
+        nearest_stream_dist_km=data["nearest_stream_dist_km"],
+        water_quality_json=json.dumps(data["water_quality"])
     )
 
 # allows running the app directly with "python app.py" instead of "flask run"

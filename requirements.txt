@@ -4,3 +4,4 @@ leaflet
 shapely
 python-dotenv
 requests
+rasterio

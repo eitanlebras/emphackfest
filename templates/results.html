@@ -44,6 +44,7 @@
         var streams = {{ streams_json | safe }};
         var stormwater = {{ stormwater_json | safe }};
         var watershedFeatures = {{ watersheds_json | safe }};
+        var waterQuality = {{ water_quality_json | default('null') | safe }};
         var userLat = {{ lat }};
         var userLon = {{ lon }};
         var drainCount = stormwater.length;
@@ -100,9 +101,11 @@
             .bindPopup("Your location").openPopup();
 
         // --- legend control (top-right) ---
+        var legendDiv = null;
         var legend = L.control({ position: "topright" });
         legend.onAdd = function() {
             var div = L.DomUtil.create("div", "map-legend");
+            legendDiv = div;
             var html =
                 '<h4>Legend</h4>' +
                 '<i style="background:#7b2cbf"></i> Stormwater Discharge Point<br>' +
@@ -115,10 +118,67 @@
                 var n = f.properties.Name || "Watershed " + (i+1);
                 html += '<br><i style="background:' + c + ';opacity:0.5"></i> ' + n;
             });
+            // --- water quality entry ---
+            if (waterQuality) {
+                var wqRank = waterQuality.max_rank;
+                var wqColor = wqRank <= 4 ? '#2a9d8f' : wqRank <= 7 ? '#fb8500' : '#e63946';
+                var wqLabel = wqRank <= 4 ? 'Low' : wqRank <= 7 ? 'Moderate' : 'High';
+                html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
+                        '<span style="font-size:11px;color:#555;">Water quality (local):<br>' +
+                        '<strong style="color:' + wqColor + '">' + wqLabel + '</strong>' +
+                        ' &mdash; ' + waterQuality.total_impairments + ' impairment' +
+                        (waterQuality.total_impairments !== 1 ? 's' : '') + ' detected</span>';
+            }
+
+            html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
+                    '<span id="road-density-entry" style="font-size:11px;color:#555;">' +
+                    'Road density (500m): <em>loading\u2026</em></span>';
             div.innerHTML = html;
             return div;
         };
         legend.addTo(map);
+
+        // --- fetch road density from Overpass API (OSM) within 500m ---
+        (function() {
+            var RADIUS = 500; // metres
+            var AREA_KM2 = Math.PI * (RADIUS / 1000) * (RADIUS / 1000); // π × r²
+            var query = '[out:json][timeout:15];(way["highway"](around:' + RADIUS + ',' +
+                        userLat + ',' + userLon + '););out geom;';
+            fetch('https://overpass-api.de/api/interpreter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'data=' + encodeURIComponent(query)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var totalM = 0;
+                (data.elements || []).forEach(function(way) {
+                    if (!way.geometry || way.geometry.length < 2) return;
+                    for (var i = 0; i < way.geometry.length - 1; i++) {
+                        totalM += distanceMeters(
+                            way.geometry[i].lat, way.geometry[i].lon,
+                            way.geometry[i+1].lat, way.geometry[i+1].lon
+                        );
+                    }
+                });
+                var density = (totalM / 1000) / AREA_KM2;
+                var label, color;
+                if (density < 5)       { label = 'Low';      color = '#2a9d8f'; }
+                else if (density < 15) { label = 'Moderate'; color = '#fb8500'; }
+                else                   { label = 'High';     color = '#e63946'; }
+                var entry = document.getElementById('road-density-entry');
+                if (entry) {
+                    entry.innerHTML =
+                        'Road density (500m):<br>' +
+                        '<strong style="color:' + color + '">' + label + '</strong>' +
+                        ' &mdash; ' + density.toFixed(1) + ' km/km\u00B2';
+                }
+            })
+            .catch(function() {
+                var entry = document.getElementById('road-density-entry');
+                if (entry) entry.textContent = 'Road density: unavailable';
+            });
+        })();
 
         // all salmon & trout species found in this dataset
         var salmonSpecies = "Chinook Salmon, Coho Salmon, Chum Salmon, Pink Salmon, Sockeye Salmon";
