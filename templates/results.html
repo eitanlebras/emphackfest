@@ -172,25 +172,70 @@
         L.marker([userLat, userLon]).addTo(map)
             .bindPopup("Your location").openPopup();
 
-        // --- legend control (top-right) ---
+        // --- layer filter panel (top-left) ---
+        var filterPanel = L.control({ position: "topleft" });
+        filterPanel.onAdd = function() {
+            var div = L.DomUtil.create("div", "layer-panel");
+            div.innerHTML =
+                '<h4>Layers</h4>' +
+                '<label><input type="checkbox" id="toggle-watersheds"> Watershed Boundaries</label>' +
+                '<label><input type="checkbox" id="toggle-nlcd"> Impervious Surface (NLCD)</label>';
+            L.DomEvent.disableClickPropagation(div);
+            return div;
+        };
+        filterPanel.addTo(map);
+
+        // watershed toggle
+        document.getElementById("toggle-watersheds").addEventListener("change", function() {
+            if (this.checked) map.addLayer(watershedGroup);
+            else map.removeLayer(watershedGroup);
+            rebuildLegend();
+        });
+
+        // NLCD toggle
+        document.getElementById("toggle-nlcd").addEventListener("change", function() {
+            nlcdEnabled = this.checked;
+            if (nlcdEnabled) loadNlcdOverlay();
+            else if (nlcdOverlay) { map.removeLayer(nlcdOverlay); nlcdOverlay = null; }
+            rebuildLegend();
+        });
+
+        // --- dynamic legend (top-right) — rebuilds when layers toggle ---
         var legendDiv = null;
-        var legend = L.control({ position: "topright" });
-        legend.onAdd = function() {
-            var div = L.DomUtil.create("div", "map-legend");
-            legendDiv = div;
+        var legendControl = L.control({ position: "topright" });
+        legendControl.onAdd = function() {
+            legendDiv = L.DomUtil.create("div", "map-legend");
+            rebuildLegend();
+            return legendDiv;
+        };
+        legendControl.addTo(map);
+
+        function rebuildLegend() {
+            if (!legendDiv) return;
             var html =
                 '<h4>Legend</h4>' +
                 '<i style="background:#7b2cbf"></i> Stormwater Discharge Point<br>' +
                 '<span class="line" style="background:#e63946"></span> High Risk Stream<br>' +
                 '<span class="line" style="background:#fb8500"></span> Moderate Risk Stream<br>' +
                 '<span class="line" style="background:#2a9d8f"></span> Low Risk Stream';
-            // add watershed entries
-            watershedFeatures.forEach(function(f, i) {
-                var c = wsPalette[i % wsPalette.length];
-                var n = f.properties.Name || "Watershed " + (i+1);
-                html += '<br><i style="background:' + c + ';opacity:0.5"></i> ' + n;
-            });
-            // --- water quality entry ---
+
+            // watershed entries — only when layer is on
+            if (document.getElementById("toggle-watersheds") && document.getElementById("toggle-watersheds").checked) {
+                html += '<br><strong style="font-size:11px;margin-top:4px;display:inline-block;">Watersheds</strong>';
+                watershedFeatures.forEach(function(f, i) {
+                    var c = wsPalette[i % wsPalette.length];
+                    var n = f.properties.Name || "Watershed " + (i+1);
+                    html += '<br><i style="background:' + c + ';opacity:0.5"></i> ' + n;
+                });
+            }
+
+            // NLCD gradient — only when layer is on
+            if (document.getElementById("toggle-nlcd") && document.getElementById("toggle-nlcd").checked) {
+                html += '<br><strong style="font-size:11px;margin-top:4px;display:inline-block;">Impervious Surface</strong>';
+                html += '<br><span class="nlcd-gradient"></span> 0 – 100%';
+            }
+
+            // water quality entry (always shown if data exists)
             if (waterQuality) {
                 var wqRank = waterQuality.max_rank;
                 var wqColor = wqRank <= 4 ? '#2a9d8f' : wqRank <= 7 ? '#fb8500' : '#e63946';
@@ -202,13 +247,12 @@
                         (waterQuality.total_impairments !== 1 ? 's' : '') + ' detected</span>';
             }
 
+            // road density placeholder (filled by Overpass fetch)
             html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
                     '<span id="road-density-entry" style="font-size:11px;color:#555;">' +
                     'Road density (500m): <em>loading\u2026</em></span>';
-            div.innerHTML = html;
-            return div;
-        };
-        legend.addTo(map);
+            legendDiv.innerHTML = html;
+        }
 
         // --- fetch road density from Overpass API (OSM) within 500m ---
         (function() {
@@ -224,7 +268,8 @@
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 var totalM = 0;
-                (data.elements || []).forEach(function(way) {
+                var elements = data.elements || [];
+                elements.forEach(function(way) {
                     if (!way.geometry || way.geometry.length < 2) return;
                     for (var i = 0; i < way.geometry.length - 1; i++) {
                         totalM += distanceMeters(
@@ -233,6 +278,12 @@
                         );
                     }
                 });
+                // if no road data found, show unavailable
+                if (elements.length === 0) {
+                    var entry = document.getElementById('road-density-entry');
+                    if (entry) entry.textContent = 'Road density: unavailable';
+                    return;
+                }
                 var density = (totalM / 1000) / AREA_KM2;
                 var label, color;
                 if (density < 5)       { label = 'Low';      color = '#2a9d8f'; }
