@@ -43,6 +43,7 @@
         // data passed from Flask (already JSON)
         var streams = {{ streams_json | safe }};
         var stormwater = {{ stormwater_json | safe }};
+        var watershedFeatures = {{ watersheds_json | safe }};
         var userLat = {{ lat }};
         var userLon = {{ lon }};
         var drainCount = stormwater.length;
@@ -70,6 +71,30 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
+        // --- draw watershed boundaries (behind everything else) ---
+        var wsPalette = ["#264653","#2a9d8f","#e9c46a","#f4a261","#e76f51","#6a4c93","#1982c4","#8ac926"];
+        watershedFeatures.forEach(function(feature, i) {
+            var color = wsPalette[i % wsPalette.length];
+            var name = feature.properties.Name || "Unknown";
+            var area = feature.properties.AreaSqKm ? parseFloat(feature.properties.AreaSqKm).toFixed(1) + " km²" : "N/A";
+            var huc = feature.properties.HUC12 || "";
+
+            var layer = L.geoJSON(feature, {
+                style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.15, dashArray: "6 4" }
+            }).addTo(map);
+
+            layer.bindPopup(
+                '<div class="popup-card">' +
+                '  <h3>' + name + ' Watershed</h3>' +
+                '  <p>HUC-12: <strong>' + huc + '</strong></p>' +
+                '  <p>Area: <strong>' + area + '</strong></p>' +
+                '</div>'
+            );
+
+            layer.on("mouseover", function() { layer.setStyle({ fillOpacity: 0.3, weight: 3 }); });
+            layer.on("mouseout", function() { layer.setStyle({ fillOpacity: 0.15, weight: 2 }); });
+        });
+
         // mark the user's location
         L.marker([userLat, userLon]).addTo(map)
             .bindPopup("Your location").openPopup();
@@ -78,12 +103,19 @@
         var legend = L.control({ position: "topright" });
         legend.onAdd = function() {
             var div = L.DomUtil.create("div", "map-legend");
-            div.innerHTML =
+            var html =
                 '<h4>Legend</h4>' +
                 '<i style="background:#7b2cbf"></i> Stormwater Discharge Point<br>' +
                 '<span class="line" style="background:#e63946"></span> High Risk Stream<br>' +
                 '<span class="line" style="background:#fb8500"></span> Moderate Risk Stream<br>' +
                 '<span class="line" style="background:#2a9d8f"></span> Low Risk Stream';
+            // add watershed entries
+            watershedFeatures.forEach(function(f, i) {
+                var c = wsPalette[i % wsPalette.length];
+                var n = f.properties.Name || "Watershed " + (i+1);
+                html += '<br><i style="background:' + c + ';opacity:0.5"></i> ' + n;
+            });
+            div.innerHTML = html;
             return div;
         };
         legend.addTo(map);
@@ -110,7 +142,7 @@
                 '  <p>Risk: <span class="risk-badge risk-' + risk + '">' + riskLabels[risk] + '</span></p>' +
                 '  <div class="divider"></div>' +
                 '  <p>Distance: <strong>' + dist + ' m</strong> from your location</p>' +
-                '  <p style="font-size:11px;color:#888;">This stream is part of the Puget Sound salmon watershed</p>' +
+                '  <p style="font-size:11px;color:#888;">Watershed: ' + (feature.properties.watershed_name || "Unknown") + '</p>' +
                 '</div>';
 
             var layer = L.geoJSON(feature, {
@@ -196,5 +228,14 @@
             ], { padding: [50, 50] });
         }
     </script>
+
+    <div class="enter-location">
+            <label for="pac-container" id="address-label">Type your address</label>
+            <div id="pac-container"></div>
+            <p class="discalimer">We don't store your data. <a href="#">Privacy Policy</a></p>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8AfiCIiL8W1Q6CNiTGfFVxur20jb3eP8&callback=initMap&libraries=places&v=weekly" defer></script>
 
 {% endblock %}

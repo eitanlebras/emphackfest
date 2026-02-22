@@ -36,6 +36,11 @@ header {
   width: 50%;
 }
 
+#results-map {
+  height: 500px;
+  width: 100%;
+}
+
 #pac-container {
   max-width: 480px;
 }

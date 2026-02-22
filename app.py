@@ -1,8 +1,9 @@
 # import statements
+import os
+os.environ["OGR_GEOJSON_MAX_OBJ_SIZE"] = "0"
 from flask import Flask, render_template, request, jsonify
 import geopandas as gpd
-from shapely.geometry import Point
-import os
+from shapely.geometry import Point, box
 import json
 import requests
 
@@ -46,6 +47,7 @@ def load_geo(path, crs="EPSG:4326"):
 
 streams = load_geo("data/salmon_streams.geojson")
 stormwater = load_geo("data/storm_discharge.geojson")
+watersheds = load_geo("data/watershed_boundaries.geojson")
 
 @app.route("/")
 def home():
@@ -80,13 +82,16 @@ def score_to_color(score):
 
 # per-stream risk color based on its distance and nearby drain count
 def get_risk_color(distance_m, drain_count):
-    # proximity: linearly decreases over 1 km (max 70 pts)
     proximity = 70 * max(0, 1 - distance_m / 1000)
-    # drain boost: each nearby drain adds 6 pts (max 30 pts)
     drain_boost = min(30, drain_count * 6)
     score = max(0, min(100, int(proximity + drain_boost)))
     return score_to_color(score)
 
+def _geodf_to_features(gdf):
+    """Convert a GeoDataFrame to GeoJSON features, handling Timestamp columns."""
+    for col in gdf.select_dtypes(include=["datetime", "datetimetz"]).columns:
+        gdf[col] = gdf[col].astype(str)
+    return json.loads(gdf.to_json())["features"]
 
 # runs the analysis for a given lat/lon, returns a dictionary of results
 def run_analysis(lat, lon):
@@ -170,10 +175,23 @@ def run_analysis(lat, lon):
             seen[llid] = f
             merged_features.append(f)
 
+    # find watersheds intersecting a ~3km bbox around the user
+    nearby_watersheds = []
+    if not watersheds.empty:
+        buf = 0.03  # ~3km in degrees
+        bbox = box(lon - buf, lat - buf, lon + buf, lat + buf)
+        hits = watersheds[watersheds.intersects(bbox)]
+        if not hits.empty:
+            # simplify geometry to reduce payload size
+            hits_simple = hits.copy()
+            hits_simple["geometry"] = hits_simple.geometry.simplify(0.0005)
+            cols = [c for c in ["Name", "HUC12", "AreaSqKm", "geometry"] if c in hits_simple.columns]
+            nearby_watersheds = json.loads(hits_simple[cols].to_json(default=str))["features"]
+
     return {
         "nearby_streams": merged_features,
-        # convert stormwater to geojson (default=str handles Timestamp columns)
-        "nearby_stormwater": json.loads(nearby_stormwater.to_crs(epsg=4326).to_json(default=str))["features"] if not nearby_stormwater.empty else [],
+        "nearby_stormwater": _geodf_to_features(nearby_stormwater.to_crs(epsg=4326)) if not nearby_stormwater.empty else [],
+        "nearby_watersheds": nearby_watersheds,
         "impact_score": impact_score,
         "risk_color": score_to_color(impact_score),
         # nearest stream info (only set when no streams are within 1 km)
@@ -212,6 +230,7 @@ def results():
         lon=lon,
         streams_json=json.dumps(data["nearby_streams"]),
         stormwater_json=json.dumps(data["nearby_stormwater"]),
+        watersheds_json=json.dumps(data["nearby_watersheds"]),
         impact_score=data["impact_score"],
         risk_color=data["risk_color"],
         nearest_stream_point=json.dumps(data["nearest_stream_point"]),
