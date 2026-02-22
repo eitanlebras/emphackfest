@@ -128,15 +128,32 @@ def run_analysis(lat, lon):
         for geom in nearby_streams.geometry
     ]
 
+    # if no streams within 1 km, find the closest one anywhere
+    nearest_stream_point = None
+    nearest_stream_dist_km = None
+    if nearby_streams.empty and not streams_m.empty:
+        # get distance to every stream and pick the closest
+        all_distances = streams_m.geometry.distance(user_point_m)
+        closest_idx = all_distances.idxmin()
+        nearest_stream_dist_km = round(all_distances[closest_idx] / 1000, 1)
+        # get the nearest point on that stream in lat/lon
+        closest_geom = streams_m.geometry[closest_idx]
+        nearest_pt_m = closest_geom.interpolate(closest_geom.project(user_point_m))
+        nearest_pt_4326 = gpd.GeoSeries([nearest_pt_m], crs="EPSG:3857").to_crs(epsg=4326).iloc[0]
+        nearest_stream_point = [nearest_pt_4326.y, nearest_pt_4326.x]
+
     # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
 
     return {
         "nearby_streams": nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else [],
-        # convert stormwater to geojson features so coordinates serialize properly
-        "nearby_stormwater": json.loads(nearby_stormwater.to_crs(epsg=4326).to_json())["features"] if not nearby_stormwater.empty else [],
+        # convert stormwater to geojson (default=str handles Timestamp columns)
+        "nearby_stormwater": json.loads(nearby_stormwater.to_crs(epsg=4326).to_json(default=str))["features"] if not nearby_stormwater.empty else [],
         "impact_score": impact_score,
-        "risk_color": score_to_color(impact_score)
+        "risk_color": score_to_color(impact_score),
+        # nearest stream info (only set when no streams are within 1 km)
+        "nearest_stream_point": nearest_stream_point,
+        "nearest_stream_dist_km": nearest_stream_dist_km
     }
 
 
@@ -171,7 +188,9 @@ def results():
         streams_json=json.dumps(data["nearby_streams"]),
         stormwater_json=json.dumps(data["nearby_stormwater"]),
         impact_score=data["impact_score"],
-        risk_color=data["risk_color"]
+        risk_color=data["risk_color"],
+        nearest_stream_point=json.dumps(data["nearest_stream_point"]),
+        nearest_stream_dist_km=data["nearest_stream_dist_km"]
     )
 
 # allows running the app directly with "python app.py" instead of "flask run"

@@ -283,3 +283,16 @@ section#impact .right-part {
 .risk-red { background: #e63946; }
 .risk-yellow { background: #fb8500; color: #1b1b1b; }
 .risk-green { background: #2a9d8f; }
+
+/* alert banner when no rivers nearby */
+.no-rivers-alert {
+  max-width: 900px;
+  margin: 0 auto 20px;
+  padding: 12px 20px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 500;
+  color: #664d03;
+}

@@ -10,6 +10,13 @@
         <p>Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
     </div>
 
+    <!-- alert when no rivers are nearby -->
+    {% if nearest_stream_dist_km %}
+    <div class="no-rivers-alert">
+        No salmon streams within 1 km. Nearest stream is <strong>{{ nearest_stream_dist_km }} km</strong> away (shown on map).
+    </div>
+    {% endif %}
+
     <!-- leaflet map fills this div -->
     <div id="results-map"></div>
 
@@ -85,6 +92,31 @@
                 });
             }
         });
+        // if no nearby streams, draw a dashed arrow to the nearest one
+        var nearestPoint = {{ nearest_stream_point | safe }};
+        if (nearestPoint) {
+            // dashed line from user to nearest stream
+            L.polyline([[userLat, userLon], nearestPoint], {
+                color: "#e63946",
+                weight: 3,
+                dashArray: "10, 8",
+                opacity: 0.8
+            }).addTo(map);
+
+            // arrowhead marker at the stream end
+            L.circleMarker(nearestPoint, {
+                radius: 7,
+                color: "#e63946",
+                fillColor: "#e63946",
+                fillOpacity: 1
+            }).addTo(map).bindPopup("Nearest salmon stream");
+
+            // zoom out so both points are visible
+            map.fitBounds([
+                [userLat, userLon],
+                nearestPoint
+            ], { padding: [50, 50] });
+        }
     </script>
 
 {% endblock %}
