@@ -32,27 +32,57 @@
         L.marker([userLat, userLon]).addTo(map)
             .bindPopup("Your location").openPopup();
 
+        // map risk names to vibrant colors
+        var riskColors = { red: "#e63946", yellow: "#fb8500", green: "#2a9d8f" };
+
         // draw each salmon stream, colored by risk
         streams.forEach(function(feature) {
-            L.geoJSON(feature, {
-                style: function() {
-                    // use the riskColor we set in Python (red/yellow/green)
-                    return { color: feature.properties.riskColor || "blue", weight: 3 };
-                }
+            var color = riskColors[feature.properties.riskColor] || "#2a9d8f";
+            var name = feature.properties.LLID_STRM_NAME || "Salmon stream";
+            var species = feature.properties.SPECIES || "";
+
+            var layer = L.geoJSON(feature, {
+                style: { color: color, weight: 5, opacity: 0.9 }
             }).addTo(map);
+
+            // popup with stream name and species
+            layer.bindPopup("<b>" + name + "</b>" + (species ? "<br>" + species : ""));
+
+            // highlight on hover: thicker line + white glow
+            layer.on("mouseover", function() {
+                layer.setStyle({ weight: 8, color: "#fff" });
+                setTimeout(function() { layer.setStyle({ weight: 8, color: color }); }, 80);
+                layer.setStyle({ weight: 8 });
+            });
+            // reset on mouseout
+            layer.on("mouseout", function() {
+                layer.setStyle({ weight: 5, color: color, opacity: 0.9 });
+            });
         });
 
-        // draw stormwater discharge points as circle markers
+        // draw stormwater discharge points as purple circle markers
         stormwater.forEach(function(feature) {
-            // each feature is a GeoJSON object with geometry.coordinates
             var coords = feature.geometry && feature.geometry.coordinates;
             if (coords) {
-                L.circleMarker([coords[1], coords[0]], {
-                    radius: 6,
-                    color: "orange",
-                    fillColor: "orange",
-                    fillOpacity: 0.7
-                }).addTo(map).bindPopup("Stormwater discharge");
+                var name = feature.properties.DischargeName || "Stormwater discharge";
+                var marker = L.circleMarker([coords[1], coords[0]], {
+                    radius: 8,
+                    color: "#7b2cbf",
+                    fillColor: "#7b2cbf",
+                    fillOpacity: 0.85,
+                    weight: 2
+                }).addTo(map).bindPopup("<b>" + name + "</b>");
+
+                // grow on hover
+                marker.on("mouseover", function() {
+                    marker.setRadius(12);
+                    marker.setStyle({ weight: 3, color: "#fff" });
+                });
+                // shrink on mouseout
+                marker.on("mouseout", function() {
+                    marker.setRadius(8);
+                    marker.setStyle({ weight: 2, color: "#7b2cbf" });
+                });
             }
         });
     </script>
