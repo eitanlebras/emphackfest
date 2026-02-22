@@ -49,6 +49,14 @@
         .layer-panel label { display: block; cursor: pointer; }
         .layer-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
 
+        /* suggestions card */
+        .suggestions-card { padding: 16px 0; margin: 20px 0; }
+        .suggestions-card h3 { margin: 0 0 12px; font-size: 16px; }
+        .suggestions-card .suggestion { margin-bottom: 16px; }
+        .suggestions-card .suggestion:last-child { margin-bottom: 0; }
+        .suggestions-card h4 { margin: 0 0 6px; font-size: 14px; }
+        .suggestions-card p { margin: 0; font-size: 13px; color: #444; line-height: 1.7; white-space: pre-line; }
+
         /* NLCD gradient bar in legend */
         .nlcd-gradient { width: 100px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 6px;
             background: linear-gradient(to right, rgba(0,200,30,0.4), rgba(200,100,30,0.7), rgba(255,0,30,0.9)); }
@@ -437,6 +445,25 @@
 
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8AfiCIiL8W1Q6CNiTGfFVxur20jb3eP8&callback=initMap&libraries=places&v=weekly" defer></script>
+
+    <!-- AI-generated suggestions for this location -->
+    {% if suggestions %}
+    <div class="suggestions-card">
+        <h3>What You Can Do Here</h3>
+        {% if suggestions.community %}
+        <div class="suggestion">
+            <h4>For Community Members</h4>
+            <p>{{ suggestions.community }}</p>
+        </div>
+        {% endif %}
+        {% if suggestions.scientist %}
+        <div class="suggestion">
+            <h4>For Conservation Scientists</h4>
+            <p>{{ suggestions.scientist }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 
         <div>
         <h3>How do we calculate the danger score?</h3>

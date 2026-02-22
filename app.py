@@ -1,11 +1,14 @@
 # import statements
 import os
 os.environ["OGR_GEOJSON_MAX_OBJ_SIZE"] = "0"
+from dotenv import load_dotenv
+load_dotenv()
 from flask import Flask, render_template, request, jsonify, send_file
 import geopandas as gpd
 from shapely.geometry import Point, box
 import json
 import requests
+import openai
 import rasterio
 from rasterio.warp import transform_bounds, reproject, Resampling, calculate_default_transform
 from rasterio.transform import from_bounds
@@ -270,6 +273,46 @@ def run_analysis(lat, lon):
     }
 
 
+# generate two suggestions via GPT-4o: one for community, one for scientists
+# lazy init — client created on first call so .env is loaded first
+_openai_client = None
+def _get_openai():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = openai.OpenAI()
+    return _openai_client
+
+def get_suggestions(impact_score, discharge_count, road_density, water_quality, precip_forecast):
+    prompt = (
+        f"You are a salmon habitat conservation advisor. Given this data:\n"
+        f"- Danger score: {impact_score}/100\n"
+        f"- Stormwater discharge points nearby: {discharge_count}\n"
+        f"- Road density: {road_density}\n"
+        f"- Water quality: {water_quality}\n"
+        f"- Precipitation forecast: {precip_forecast}\n\n"
+        "Give exactly two sets of bullet-point suggestions. Each suggestion MUST include "
+        "specific numbers, percentages, or measurable actions based on the data above. "
+        "For example: 'Reducing impervious surface by 15% in this area would cut runoff volume by ~20%.' "
+        "Do NOT write generic advice. Reference the actual numbers provided.\n\n"
+        "1. COMMUNITY: 2-3 bullet points a regular person can act on, with concrete numbers.\n"
+        "2. SCIENTIST: 2-3 bullet points for a conservation scientist, with technical specifics.\n\n"
+        "Return JSON with keys \"community\" and \"scientist\". Each value is a string "
+        "with bullet points separated by newlines, each starting with •"
+    )
+    try:
+        resp = _get_openai().chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.7,
+            max_tokens=300,
+        )
+        return json.loads(resp.choices[0].message.content)
+    except Exception as e:
+        print(f"GPT suggestion error: {e}")
+        return {"community": None, "scientist": None}
+
+
 # API endpoint — returns JSON (kept for any future use)
 @app.route("/analyze", methods=["POST"])
 def analyze():
@@ -279,7 +322,16 @@ def analyze():
     except (KeyError, ValueError):
         return jsonify({"error": "Invalid or missing coordinates"}), 400
 
-    return jsonify(run_analysis(lat, lon))
+    data = run_analysis(lat, lon)
+    # add GPT-generated suggestions
+    data["suggestions"] = get_suggestions(
+        impact_score=data["impact_score"],
+        discharge_count=len(data["nearby_stormwater"]),
+        road_density=data.get("traffic"),
+        water_quality=data.get("water_quality"),
+        precip_forecast="see legend",
+    )
+    return jsonify(data)
 
 
 # results page — runs analysis and renders the HTML template
@@ -291,10 +343,16 @@ def results():
     except (TypeError, ValueError):
         return "Missing or invalid lat/lon", 400
 
-    # run the analysis
+    # run the analysis + GPT suggestions
     data = run_analysis(lat, lon)
+    data["suggestions"] = get_suggestions(
+        impact_score=data["impact_score"],
+        discharge_count=len(data["nearby_stormwater"]),
+        road_density=data.get("traffic"),
+        water_quality=data.get("water_quality"),
+        precip_forecast="see legend",
+    )
 
-    # pass everything to the template
     return render_template("results.html",
         lat=lat,
         lon=lon,
@@ -307,7 +365,8 @@ def results():
         nearest_stream_feature_json=json.dumps(data["nearest_stream_feature"]),
         nearest_stream_dist_km=data["nearest_stream_dist_km"],
         water_quality_json=json.dumps(data["water_quality"]),
-        traffic_json=json.dumps(data["traffic"])
+        traffic_json=json.dumps(data["traffic"]),
+        suggestions=data.get("suggestions", {})
     )
 
 # --- NLCD impervious surface tile endpoint ---
