@@ -55,6 +55,7 @@
         var stormwater = {{ stormwater_json | safe }};
         var watershedFeatures = {{ watersheds_json | safe }};
         var waterQuality = {{ water_quality_json | default('null') | safe }};
+        var trafficData = {{ traffic_json | default('null') | safe }};
         var userLat = {{ lat }};
         var userLon = {{ lon }};
         var drainCount = stormwater.length;
@@ -210,6 +211,17 @@
                         '<strong style="color:' + wqColor + '">' + wqLabel + '</strong>' +
                         ' &mdash; ' + waterQuality.total_impairments + ' impairment' +
                         (waterQuality.total_impairments !== 1 ? 's' : '') + ' detected</span>';
+            }
+
+            // heavy traffic entry (always shown if data exists)
+            if (trafficData) {
+                var tRank = trafficData.ehd_rank;
+                var tColor = tRank <= 4 ? '#2a9d8f' : tRank <= 7 ? '#fb8500' : '#e63946';
+                var tLabel = tRank <= 4 ? 'Low' : tRank <= 7 ? 'Moderate' : 'High';
+                html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
+                        '<span style="font-size:11px;color:#555;">Heavy traffic exposure:<br>' +
+                        '<strong style="color:' + tColor + '">' + tLabel + '</strong>' +
+                        ' &mdash; EHD rank ' + tRank + '/10</span>';
             }
 
             // road density (value persists across rebuilds)

@@ -55,6 +55,7 @@ streams = load_geo("data/salmon_streams.geojson")
 stormwater = load_geo("data/storm_discharge.geojson")
 watersheds = load_geo("data/watershed_boundaries.geojson")
 water_quality = load_geo("data/water_quality_pollutants.geojson")
+heavy_traffic = load_geo("data/proximity_heavy_traffic_roadways.geojson")
 
 @app.route("/")
 def home():
@@ -222,6 +223,20 @@ def run_analysis(lat, lon):
                 "tract_count": len(tracts)
             }
 
+    # --- heavy traffic: find the census tract(s) intersecting a ~1km buffer ---
+    traffic_data = None
+    if not heavy_traffic.empty:
+        buf_deg = 0.009  # ~1 km in degrees latitude
+        bbox = box(lon - buf_deg, lat - buf_deg, lon + buf_deg, lat + buf_deg)
+        hits = heavy_traffic[heavy_traffic.intersects(bbox)]
+        if not hits.empty:
+            containing = hits[hits.contains(user_point)]
+            tracts = containing if not containing.empty else hits
+            traffic_data = {
+                "ehd_rank": int(tracts["EHD_Rank"].max()),
+                "env_exp_rank": int(tracts["Env_Exp_Rank"].max()),
+            }
+
     return {
         "nearby_streams": merged_features,
         "nearby_stormwater": _geodf_to_features(nearby_stormwater.to_crs(epsg=4326)) if not nearby_stormwater.empty else [],
@@ -231,7 +246,8 @@ def run_analysis(lat, lon):
         # nearest stream info (only set when no streams are within 1 km)
         "nearest_stream_point": nearest_stream_point,
         "nearest_stream_dist_km": nearest_stream_dist_km,
-        "water_quality": wq_data
+        "water_quality": wq_data,
+        "traffic": traffic_data
     }
 
 
@@ -270,7 +286,8 @@ def results():
         risk_color=data["risk_color"],
         nearest_stream_point=json.dumps(data["nearest_stream_point"]),
         nearest_stream_dist_km=data["nearest_stream_dist_km"],
-        water_quality_json=json.dumps(data["water_quality"])
+        water_quality_json=json.dumps(data["water_quality"]),
+        traffic_json=json.dumps(data["traffic"])
     )
 
 # --- NLCD impervious surface tile endpoint ---
