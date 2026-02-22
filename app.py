@@ -6,6 +6,7 @@ import geopandas as gpd
 from shapely.geometry import Point, box
 import json
 import requests
+import pandas as pd
 import rasterio
 from rasterio.warp import transform_bounds, reproject, Resampling, calculate_default_transform
 from rasterio.transform import from_bounds
@@ -51,11 +52,61 @@ def load_geo(path, crs="EPSG:4326"):
         print(f"Warning: failed to read {path}: {e}")
         return gpd.GeoDataFrame(geometry=[], crs=crs)
 
+def load_spawning_surveys(path):
+    """Load WDFW spawning ground surveys and aggregate by LLID.
+    Returns a dict: {llid_int: {species, latest_year, total_redds, survey_count}}
+    """
+    if not os.path.exists(path):
+        return {}
+    try:
+        df = pd.read_csv(path, low_memory=False,
+                         usecols=["LLID", "Species", "Run Year", "Total Visible Redds"])
+        df = df.dropna(subset=["LLID"])
+        df["LLID"] = df["LLID"].astype("int64")
+
+        # unique species observed per stream across all years
+        species_by_llid = (
+            df.groupby("LLID")["Species"]
+            .apply(lambda x: sorted(set(x.dropna())))
+            .to_dict()
+        )
+
+        # most recent year's total visible redds per stream
+        df_r = df.dropna(subset=["Run Year", "Total Visible Redds"]).copy()
+        df_r["Run Year"] = df_r["Run Year"].astype(int)
+        yearly = df_r.groupby(["LLID", "Run Year"])["Total Visible Redds"].sum().reset_index()
+        latest_idx = yearly.groupby("LLID")["Run Year"].idxmax()
+        latest = yearly.loc[latest_idx].set_index("LLID")
+
+        # survey count per stream
+        survey_count = df.groupby("LLID").size().to_dict()
+
+        result = {}
+        for llid in df["LLID"].unique():
+            entry = {
+                "species": species_by_llid.get(llid, []),
+                "latest_year": None,
+                "total_redds": None,
+                "survey_count": survey_count.get(llid, 0),
+            }
+            if llid in latest.index:
+                row = latest.loc[llid]
+                entry["latest_year"] = int(row["Run Year"])
+                entry["total_redds"] = int(row["Total Visible Redds"])
+            result[int(llid)] = entry
+        print(f"Loaded spawning surveys for {len(result)} streams.")
+        return result
+    except Exception as e:
+        print(f"Warning: failed to load spawning surveys: {e}")
+        return {}
+
+
 streams = load_geo("data/salmon_streams.geojson")
 stormwater = load_geo("data/storm_discharge.geojson")
 watersheds = load_geo("data/watershed_boundaries.geojson")
 water_quality = load_geo("data/water_quality_pollutants.geojson")
 heavy_traffic = load_geo("data/proximity_heavy_traffic_roadways.geojson")
+spawning_surveys = load_spawning_surveys("data/WDFW-Spawning_Ground_Surveys.csv")
 
 @app.route("/")
 def home():
@@ -163,6 +214,11 @@ def run_analysis(lat, lon):
             containing = watersheds[watersheds.contains(rep_pt)]
             if not containing.empty:
                 ws_name = containing.iloc[0].get("Name", None)
+        nearest_llid = row.get("LLID")
+        try:
+            nearest_survey = spawning_surveys.get(int(nearest_llid), {}) if nearest_llid else {}
+        except (ValueError, TypeError):
+            nearest_survey = {}
         nearest_stream_feature = {
             "type": "Feature",
             "geometry": row.geometry.__geo_interface__,
@@ -170,6 +226,10 @@ def run_analysis(lat, lon):
                 "LLID_STRM_NAME": row.get("LLID_STRM_NAME", "Nearest stream"),
                 "riskColor": get_risk_color(all_distances[closest_idx], drain_count),
                 "watershed_name": ws_name,
+                "survey_species": nearest_survey.get("species", []),
+                "latest_redd_year": nearest_survey.get("latest_year"),
+                "total_redds": nearest_survey.get("total_redds"),
+                "survey_count": nearest_survey.get("survey_count", 0),
             }
         }
 
@@ -206,6 +266,15 @@ def run_analysis(lat, lon):
             props["allSpecies"] = [sp] if sp else []
             # attach watershed name from spatial join
             props["watershed_name"] = ws_lookup.get(llid, None)
+            # attach spawning survey data keyed by LLID
+            try:
+                survey = spawning_surveys.get(int(llid), {})
+            except (ValueError, TypeError):
+                survey = {}
+            props["survey_species"] = survey.get("species", [])
+            props["latest_redd_year"] = survey.get("latest_year")
+            props["total_redds"] = survey.get("total_redds")
+            props["survey_count"] = survey.get("survey_count", 0)
             f["properties"] = props
             seen[llid] = f
             merged_features.append(f)

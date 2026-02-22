@@ -311,9 +311,6 @@
             });
         })();
 
-        // all salmon & trout species found in this dataset
-        var salmonSpecies = "Chinook Salmon, Coho Salmon, Chum Salmon, Pink Salmon, Sockeye Salmon";
-
         // --- draw each salmon stream (already merged by LLID) ---
         streams.forEach(function(feature) {
             var risk = feature.properties.riskColor || "green";
@@ -329,12 +326,29 @@
             }
             dist = Math.round(dist);
 
+            // species: prefer WDFW survey species, fall back to stream dataset species
+            var surveySpecies = feature.properties.survey_species || [];
+            var speciesStr = surveySpecies.length > 0
+                ? surveySpecies.join(", ")
+                : (feature.properties.SPECIES || "Salmon / Trout");
+
+            // redd count line (only show if we have survey data)
+            var totalRedds = feature.properties.total_redds;
+            var reddYear = feature.properties.latest_redd_year;
+            var surveyCount = feature.properties.survey_count || 0;
+            var reddHtml = (totalRedds != null && reddYear != null)
+                ? '<p>Redds counted: <strong>' + totalRedds + '</strong> (latest: ' + reddYear + ')</p>' +
+                  '<p style="font-size:11px;color:#888;">Based on ' + surveyCount + ' WDFW survey record' + (surveyCount !== 1 ? 's' : '') + '</p>'
+                : '<p style="font-size:11px;color:#aaa;">No WDFW redd survey data for this stream</p>';
+
             // styled popup card
             var popup =
                 '<div class="popup-card">' +
                 '  <h3>' + name + '</h3>' +
-                '  <p>Species: <strong>' + salmonSpecies + '</strong></p>' +
+                '  <p>Species: <strong>' + speciesStr + '</strong></p>' +
                 '  <p>Risk: <span class="risk-badge risk-' + risk + '">' + riskLabels[risk] + '</span></p>' +
+                '  <div class="divider"></div>' +
+                reddHtml +
                 '  <div class="divider"></div>' +
                 '  <p>Distance: <strong>' + dist + ' m</strong> from your location</p>' +
                 '  <p style="font-size:11px;color:#888;">Watershed: ' + (feature.properties.watershed_name || "Unknown") + '</p>' +
@@ -413,11 +427,24 @@
                 var risk = nearestStreamFeature.properties.riskColor || "red";
                 var sColor = riskColors[risk] || "#e63946";
                 var sName = nearestStreamFeature.properties.LLID_STRM_NAME || "Nearest stream";
+                var nSurveySpecies = nearestStreamFeature.properties.survey_species || [];
+                var nSpeciesStr = nSurveySpecies.length > 0 ? nSurveySpecies.join(", ") : "Salmon / Trout";
+                var nTotalRedds = nearestStreamFeature.properties.total_redds;
+                var nReddYear = nearestStreamFeature.properties.latest_redd_year;
+                var nSurveyCount = nearestStreamFeature.properties.survey_count || 0;
+                var nReddHtml = (nTotalRedds != null && nReddYear != null)
+                    ? '<p>Redds counted: <strong>' + nTotalRedds + '</strong> (latest: ' + nReddYear + ')</p>' +
+                      '<p style="font-size:11px;color:#888;">Based on ' + nSurveyCount + ' WDFW survey record' + (nSurveyCount !== 1 ? 's' : '') + '</p>'
+                    : '<p style="font-size:11px;color:#aaa;">No WDFW redd survey data for this stream</p>';
                 L.geoJSON(nearestStreamFeature, {
                     style: { color: sColor, weight: 5, opacity: 0.9 }
                 }).addTo(map).bindPopup(
                     '<div class="popup-card"><h3>' + sName + '</h3>' +
+                    '<p>Species: <strong>' + nSpeciesStr + '</strong></p>' +
                     '<p>Risk: <span class="risk-badge risk-' + risk + '">' + (riskLabels[risk] || "High") + '</span></p>' +
+                    '<div class="divider"></div>' +
+                    nReddHtml +
+                    '<div class="divider"></div>' +
                     '<p style="font-size:11px;color:#888;">Watershed: ' + (nearestStreamFeature.properties.watershed_name || "Unknown") + '</p></div>'
                 );
             }
@@ -427,7 +454,156 @@
                 [userLat, userLon], nearestPoint
             ], { padding: [50, 50] });
         }
+
+        // --- build nearby streams survey panel ---
+        (function() {
+            var container = document.getElementById("stream-survey-panel");
+            if (!container) return;
+
+            // collect streams with distances, sorted nearest first
+            var streamList = [];
+            streams.forEach(function(feature) {
+                var coords = feature.geometry.coordinates;
+                var dist = Infinity;
+                for (var ci = 0; ci < coords.length; ci++) {
+                    var d = distanceMeters(userLat, userLon, coords[ci][1], coords[ci][0]);
+                    if (d < dist) dist = d;
+                }
+                streamList.push({ feature: feature, dist: Math.round(dist) });
+            });
+            streamList.sort(function(a, b) { return a.dist - b.dist; });
+
+            if (streamList.length === 0) {
+                container.innerHTML = "<p style='color:#888;font-size:13px;'>No salmon streams within 1 km.</p>";
+                return;
+            }
+
+            var html = "";
+            streamList.forEach(function(item) {
+                var p = item.feature.properties;
+                var risk = p.riskColor || "green";
+                var name = p.LLID_STRM_NAME || "Salmon stream";
+                var surveySpecies = p.survey_species || [];
+                var speciesStr = surveySpecies.length > 0 ? surveySpecies.join(", ") : (p.SPECIES || "Salmon / Trout");
+                var riskColor = riskColors[risk] || "#2a9d8f";
+
+                var reddLine = (p.total_redds != null && p.latest_redd_year != null)
+                    ? '<span class="stream-stat"><strong>' + p.total_redds + '</strong> redds (' + p.latest_redd_year + ')</span>'
+                    : '<span class="stream-stat" style="color:#bbb;">No redd data</span>';
+
+                html +=
+                    '<div class="stream-card">' +
+                    '  <div class="stream-card-header">' +
+                    '    <span class="stream-name">' + name + '</span>' +
+                    '    <span class="risk-dot" style="background:' + riskColor + '" title="' + riskLabels[risk] + ' risk"></span>' +
+                    '  </div>' +
+                    '  <div class="stream-card-body">' +
+                    '    <span class="stream-stat"><strong>' + item.dist + ' m</strong> away</span>' +
+                    '    ' + reddLine +
+                    '    <span class="stream-stat" style="color:#777;font-size:11px;">' + speciesStr + '</span>' +
+                    (p.survey_count ? '<span class="stream-stat" style="color:#aaa;font-size:11px;">' + p.survey_count + ' WDFW records</span>' : '') +
+                    '  </div>' +
+                    '</div>';
+            });
+            container.innerHTML = html;
+        })();
     </script>
+
+    <!-- environmental stats row -->
+    <div id="env-stats-section">
+        <h3>Environmental Conditions</h3>
+        <div id="env-stats-row">
+            <!-- water quality card -->
+            <div class="env-card" id="wq-card">
+                <div class="env-card-label">Water Quality Impairments</div>
+                <div class="env-card-value" id="wq-value">—</div>
+                <div class="env-card-sub" id="wq-sub"></div>
+            </div>
+            <!-- storm drains card -->
+            <div class="env-card">
+                <div class="env-card-label">Storm Drains within 1 km</div>
+                <div class="env-card-value" id="drain-value">—</div>
+                <div class="env-card-sub">Stormwater discharge points</div>
+            </div>
+            <!-- traffic card -->
+            <div class="env-card" id="traffic-card">
+                <div class="env-card-label">Heavy Traffic Exposure</div>
+                <div class="env-card-value" id="traffic-value">—</div>
+                <div class="env-card-sub" id="traffic-sub"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // populate environmental stats cards
+        (function() {
+            // water quality
+            var wqVal = document.getElementById("wq-value");
+            var wqSub = document.getElementById("wq-sub");
+            var wqCard = document.getElementById("wq-card");
+            if (waterQuality) {
+                var imp = waterQuality.total_impairments;
+                var rank = waterQuality.max_rank;
+                var color = rank <= 3 ? "#2a9d8f" : rank <= 6 ? "#fb8500" : "#e63946";
+                wqVal.textContent = imp + " impairment" + (imp !== 1 ? "s" : "");
+                wqVal.style.color = color;
+                wqSub.textContent = "Water quality rank: " + rank + "/10";
+                wqCard.style.borderColor = color;
+            } else {
+                wqVal.textContent = "No data";
+                wqVal.style.color = "#bbb";
+                wqSub.textContent = "Outside coverage area";
+            }
+
+            // storm drains
+            var drainVal = document.getElementById("drain-value");
+            var drainColor = drainCount === 0 ? "#2a9d8f" : drainCount <= 3 ? "#fb8500" : "#e63946";
+            drainVal.textContent = drainCount;
+            drainVal.style.color = drainColor;
+
+            // traffic
+            var tVal = document.getElementById("traffic-value");
+            var tSub = document.getElementById("traffic-sub");
+            var tCard = document.getElementById("traffic-card");
+            if (trafficData) {
+                var tRank = trafficData.ehd_rank;
+                var tColor = tRank <= 3 ? "#2a9d8f" : tRank <= 6 ? "#fb8500" : "#e63946";
+                var tLabel = tRank <= 3 ? "Low" : tRank <= 6 ? "Moderate" : "High";
+                tVal.textContent = tLabel;
+                tVal.style.color = tColor;
+                tSub.textContent = "EHD rank: " + tRank + "/10";
+                tCard.style.borderColor = tColor;
+            } else {
+                tVal.textContent = "No data";
+                tVal.style.color = "#bbb";
+                tSub.textContent = "Outside coverage area";
+            }
+        })();
+    </script>
+
+    <!-- nearby streams survey data panel -->
+    <div id="stream-survey-section">
+        <h3>Nearby Salmon Streams</h3>
+        <div id="stream-survey-panel"></div>
+    </div>
+
+    <style>
+        #env-stats-section { max-width: 860px; margin: 24px auto 0; padding: 0 16px; }
+        #env-stats-section h3 { font-size: 16px; margin-bottom: 12px; color: #1b1b1b; }
+        #env-stats-row { display: flex; gap: 12px; flex-wrap: wrap; }
+        .env-card { flex: 1; min-width: 180px; background: #fff; border: 2px solid #e8e8e8; border-radius: 10px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); transition: border-color 0.2s; }
+        .env-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 6px; }
+        .env-card-value { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .env-card-sub { font-size: 12px; color: #888; }
+        #stream-survey-section { max-width: 860px; margin: 24px auto 0; padding: 0 16px; }
+        #stream-survey-section h3 { font-size: 16px; margin-bottom: 12px; color: #1b1b1b; }
+        .stream-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .stream-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+        .stream-name { font-weight: 700; font-size: 14px; color: #1b1b1b; }
+        .risk-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .stream-card-body { display: flex; flex-wrap: wrap; gap: 10px 20px; }
+        .stream-stat { font-size: 13px; color: #444; }
+    </style>
 
     <div class="enter-location">
             <label for="pac-container" id="address-label">Type your address</label>
