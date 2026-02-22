@@ -77,6 +77,13 @@ def score_to_color(score):
     else:
         return "green"
 
+def get_risk_color(distance_m, drain_count):
+    # distance-weighted score with a small boost for stormwater drains
+    distance_score = (1 / (distance_m / 100 + 1)) * 70
+    drain_score = min(drain_count, 5) * 6
+    score = max(0, min(100, int(distance_score + drain_score)))
+    return score_to_color(score)
+
 
 # runs the analysis for a given lat/lon, returns a dictionary of results
 def run_analysis(lat, lon):
