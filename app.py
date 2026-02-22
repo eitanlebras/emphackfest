@@ -1,49 +1,42 @@
-# import statements
+# --- setup & imports ---
 import os
-os.environ["OGR_GEOJSON_MAX_OBJ_SIZE"] = "0"
+os.environ["OGR_GEOJSON_MAX_OBJ_SIZE"] = "0"  # allow reading very large GeoJSON files
+from dotenv import load_dotenv
+load_dotenv()  # load API keys from .env file
 from flask import Flask, render_template, request, jsonify, send_file
-import geopandas as gpd
-from shapely.geometry import Point, box
+import geopandas as gpd        # geospatial dataframes (like pandas but for maps)
+from shapely.geometry import Point, box  # geometric shapes for spatial queries
 import json
 import requests
 import pandas as pd
 import rasterio
 from rasterio.warp import transform_bounds, reproject, Resampling, calculate_default_transform
 from rasterio.transform import from_bounds
-import numpy as np
-from io import BytesIO
-from PIL import Image
+import numpy as np             # number crunching for image arrays
+from io import BytesIO         # in-memory file buffer for PNG images
+from PIL import Image          # image creation/manipulation
 
-app = Flask(__name__)
+app = Flask(__name__)  # create the Flask web app
 
 
+# convert an address string to (lat, lon) using OpenStreetMap
 def geocode(address):
-    # Nominatim is OpenStreetMap's free geocoding API
     url = "https://nominatim.openstreetmap.org/search"
-
-    # try/except catches network errors or bad responses so the app does not crash
     try:
-        # send the address as a query, ask for JSON back
         r = requests.get(url, params={"q": address, "format": "json"}, headers={"User-Agent": "salmonshield"})
         results = r.json()
-
-        # if the API returns an empty list, the address was not found
         if not results:
-            return None
-
-        # grab the first result (most relevant match)
-        result = results[0]
-
-        # return as lat, lon floats
+            return None  # address not found
+        result = results[0]  # take the best match
         return float(result["lat"]), float(result["lon"])
     except Exception:
-        # returns None on any failure (network error, bad JSON, etc.)
-        return None
+        return None  # fail gracefully on network/parse errors
 
 
 
-# load geoJSON datasets
+# --- load GeoJSON data files into GeoDataFrames ---
 def load_geo(path, crs="EPSG:4326"):
+    # return empty dataframe if file missing or empty
     if not os.path.exists(path) or os.path.getsize(path) == 0:
         return gpd.GeoDataFrame(geometry=[], crs=crs)
     try:
@@ -108,28 +101,27 @@ water_quality = load_geo("data/water_quality_pollutants.geojson")
 heavy_traffic = load_geo("data/proximity_heavy_traffic_roadways.geojson")
 spawning_surveys = load_spawning_surveys("data/WDFW-Spawning_Ground_Surveys.csv")
 
+# --- routes ---
+
+# home page
 @app.route("/")
 def home():
     return render_template("index.html")
 
-# route that takes an address string and returns lat/lon coordinates as JSON
+# geocode endpoint — converts address text to lat/lon JSON
 @app.route("/geocode", methods=["POST"])
 def geocode_address():
-    # get address from the form data
     address = request.form.get("address")
-    # return 400 error if no address was sent
     if not address:
         return jsonify({"error": "No address provided"}), 400
-
-    # convert the address to coordinates using the geocode function
     coords = geocode(address)
-    # return 404 if the address could not be found
     if not coords:
         return jsonify({"error": "Could not find that address"}), 404
-
     return jsonify({"lat": coords[0], "lon": coords[1]})
 
-# risk color based on score
+# --- risk scoring helpers ---
+
+# map overall score to a color: 60+ = red, 30+ = yellow, else green
 def score_to_color(score):
     if score >= 60:
         return "red"
@@ -138,53 +130,47 @@ def score_to_color(score):
     else:
         return "green"
 
-
-# per-stream risk color based on its distance and nearby drain count
+# per-stream risk color based on how close the stream is + nearby drain count
 def get_risk_color(distance_m, drain_count):
-    proximity = 70 * max(0, 1 - distance_m / 1000)
-    drain_boost = min(30, drain_count * 6)
+    proximity = 70 * max(0, 1 - distance_m / 1000)  # closer = higher
+    drain_boost = min(30, drain_count * 6)           # more drains = higher
     score = max(0, min(100, int(proximity + drain_boost)))
     return score_to_color(score)
 
+# convert a GeoDataFrame to a list of GeoJSON features (handles date columns)
 def _geodf_to_features(gdf):
-    """Convert a GeoDataFrame to GeoJSON features, handling Timestamp columns."""
     for col in gdf.select_dtypes(include=["datetime", "datetimetz"]).columns:
-        gdf[col] = gdf[col].astype(str)
+        gdf[col] = gdf[col].astype(str)  # dates -> strings for JSON
     return json.loads(gdf.to_json())["features"]
 
-# runs the analysis for a given lat/lon, returns a dictionary of results
+# --- main analysis function ---
 def run_analysis(lat, lon):
-    # make a point from the coordinates
-    user_point = Point(lon, lat)
+    user_point = Point(lon, lat)  # shapely point (lon first, lat second)
 
-    # convert to meters so we can measure distances accurately
+    # reproject to meters (EPSG:3857) for distance calculations
     user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
 
-    # if no data loaded, return empty defaults
+    # early return if no data loaded
     if streams.empty and stormwater.empty:
         return {"nearby_streams": [], "nearby_stormwater": [], "impact_score": 0, "risk_color": "green"}
 
-    # convert datasets to meters (only if they have data)
+    # reproject datasets to meters for distance math
     streams_m = streams.to_crs(epsg=3857) if not streams.empty else streams
     stormwater_m = stormwater.to_crs(epsg=3857) if not stormwater.empty else stormwater
 
-    # find streams and stormwater within 1 km
+    # filter to features within 1 km of user
     nearby_streams = streams_m[streams_m.geometry.distance(user_point_m) < 1000] if not streams_m.empty else streams_m
     nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000] if not stormwater_m.empty else stormwater_m
 
-    # distance to the closest stream (default 1km if none found)
     nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000
 
-    # --- impact score: 3 balanced components (0-100) ---
-    # proximity: closer to a stream = higher impact (max 40 pts)
-    proximity_score = 40 * max(0, 1 - nearest_distance / 1000)
-    # stream density: more streams nearby = more habitat at risk (max 30 pts)
-    density_score = min(30, len(nearby_streams) * 5)
-    # stormwater: more drains = more pollution sources (max 30 pts)
-    stormwater_score = min(30, len(nearby_stormwater) * 5)
+    # --- impact score (0-100) from 3 components ---
+    proximity_score = 40 * max(0, 1 - nearest_distance / 1000)  # max 40 pts
+    density_score = min(30, len(nearby_streams) * 5)             # max 30 pts
+    stormwater_score = min(30, len(nearby_stormwater) * 5)       # max 30 pts
     impact_score = max(0, min(100, int(proximity_score + density_score + stormwater_score)))
 
-    # color each stream by its own distance-based risk
+    # assign a risk color to each stream based on distance + drain count
     nearby_streams = nearby_streams.copy()
     drain_count = len(nearby_stormwater)
     nearby_streams['riskColor'] = [
@@ -192,25 +178,25 @@ def run_analysis(lat, lon):
         for geom in nearby_streams.geometry
     ]
 
-    # if no streams within 1 km, find the closest one anywhere
+    # --- fallback: find nearest stream anywhere if none within 1 km ---
     nearest_stream_point = None
     nearest_stream_dist_km = None
     nearest_stream_feature = None
     if nearby_streams.empty and not streams_m.empty:
         all_distances = streams_m.geometry.distance(user_point_m)
-        closest_idx = all_distances.idxmin()
+        closest_idx = all_distances.idxmin()  # index of closest stream
         nearest_stream_dist_km = round(all_distances[closest_idx] / 1000, 1)
-        # nearest point on that stream
+        # snap to closest point on the stream line
         closest_geom = streams_m.geometry[closest_idx]
         nearest_pt_m = closest_geom.interpolate(closest_geom.project(user_point_m))
         nearest_pt_4326 = gpd.GeoSeries([nearest_pt_m], crs="EPSG:3857").to_crs(epsg=4326).iloc[0]
-        nearest_stream_point = [nearest_pt_4326.y, nearest_pt_4326.x]
-        # also grab the full stream geometry so it can be drawn
+        nearest_stream_point = [nearest_pt_4326.y, nearest_pt_4326.x]  # [lat, lon]
+        # get the full stream geometry for drawing on the map
         row = streams.loc[closest_idx]
-        # find which watershed this stream falls in
+        # look up which watershed this stream is in
         ws_name = None
         if not watersheds.empty:
-            rep_pt = row.geometry.representative_point()
+            rep_pt = row.geometry.representative_point()  # a point guaranteed inside the geometry
             containing = watersheds[watersheds.contains(rep_pt)]
             if not containing.empty:
                 ws_name = containing.iloc[0].get("Name", None)
@@ -233,11 +219,11 @@ def run_analysis(lat, lon):
             }
         }
 
-    # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
+    # convert back to lat/lon (EPSG:4326) for the frontend map
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
     raw_features = nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else []
 
-    # spatially join nearby streams to watersheds for watershed_name
+    # spatial join: match each stream to its watershed name
     if not nearby_streams_4326.empty and not watersheds.empty:
         pts = nearby_streams_4326.copy()
         pts["_rep"] = pts.geometry.representative_point()
@@ -248,7 +234,7 @@ def run_analysis(lat, lon):
     else:
         ws_lookup = {}
 
-    # group features by stream ID (LLID) so each stream is drawn once
+    # deduplicate streams by LLID — keep longest geometry, merge species
     seen = {}
     merged_features = []
     for f in raw_features:
@@ -257,8 +243,10 @@ def run_analysis(lat, lon):
         coord_count = len(f["geometry"]["coordinates"])
 
         if llid in seen:
+            # merge species into existing entry
             if sp and sp not in seen[llid]["properties"]["allSpecies"]:
                 seen[llid]["properties"]["allSpecies"].append(sp)
+            # keep the geometry with more coordinates (longer line)
             if coord_count > len(seen[llid]["geometry"]["coordinates"]):
                 seen[llid]["geometry"] = f["geometry"]
         else:
@@ -279,28 +267,26 @@ def run_analysis(lat, lon):
             seen[llid] = f
             merged_features.append(f)
 
-    # find watersheds intersecting a ~3km bbox around the user
+    # --- nearby watersheds (for map polygons) ---
     nearby_watersheds = []
     if not watersheds.empty:
-        buf = 0.03  # ~3km in degrees
+        buf = 0.03  # ~3km bounding box in degrees
         bbox = box(lon - buf, lat - buf, lon + buf, lat + buf)
         hits = watersheds[watersheds.intersects(bbox)]
         if not hits.empty:
-            # simplify geometry to reduce payload size
             hits_simple = hits.copy()
-            hits_simple["geometry"] = hits_simple.geometry.simplify(0.0005)
+            hits_simple["geometry"] = hits_simple.geometry.simplify(0.0005)  # reduce detail for speed
             cols = [c for c in ["Name", "HUC12", "AreaSqKm", "geometry"] if c in hits_simple.columns]
             nearby_watersheds = json.loads(hits_simple[cols].to_json(default=str))["features"]
 
-    # --- water quality: find the census tract(s) intersecting a ~500m buffer ---
+    # --- water quality lookup (~500m radius) ---
     wq_data = None
     if not water_quality.empty:
-        buf_deg = 0.0045  # ~500 m in degrees latitude
+        buf_deg = 0.0045
         bbox = box(lon - buf_deg, lat - buf_deg, lon + buf_deg, lat + buf_deg)
         hits = water_quality[water_quality.intersects(bbox)]
         if not hits.empty:
-            # prefer the tract that actually contains the point; fall back to bbox hits
-            containing = hits[hits.contains(user_point)]
+            containing = hits[hits.contains(user_point)]  # prefer exact tract
             tracts = containing if not containing.empty else hits
             total_impairments = int(tracts["TotalUniqueImpairments"].sum())
             max_rank = int(tracts["Water_Quality_Rank"].max())
@@ -310,36 +296,77 @@ def run_analysis(lat, lon):
                 "tract_count": len(tracts)
             }
 
-    # --- heavy traffic: find the census tract(s) intersecting a ~1km buffer ---
+    # --- heavy traffic lookup (~1km radius) ---
     traffic_data = None
     if not heavy_traffic.empty:
-        buf_deg = 0.009  # ~1 km in degrees latitude
+        buf_deg = 0.009
         bbox = box(lon - buf_deg, lat - buf_deg, lon + buf_deg, lat + buf_deg)
         hits = heavy_traffic[heavy_traffic.intersects(bbox)]
         if not hits.empty:
-            containing = hits[hits.contains(user_point)]
+            containing = hits[hits.contains(user_point)]  # prefer exact tract
             tracts = containing if not containing.empty else hits
             traffic_data = {
                 "ehd_rank": int(tracts["EHD_Rank"].max()),
                 "env_exp_rank": int(tracts["Env_Exp_Rank"].max()),
             }
 
+    # pack everything into a dict for the template
     return {
         "nearby_streams": merged_features,
         "nearby_stormwater": _geodf_to_features(nearby_stormwater.to_crs(epsg=4326)) if not nearby_stormwater.empty else [],
         "nearby_watersheds": nearby_watersheds,
         "impact_score": impact_score,
         "risk_color": score_to_color(impact_score),
-        # nearest stream info (only set when no streams are within 1 km)
-        "nearest_stream_point": nearest_stream_point,
-        "nearest_stream_dist_km": nearest_stream_dist_km,
-        "nearest_stream_feature": nearest_stream_feature,
+        "nearest_stream_point": nearest_stream_point,       # [lat, lon] or None
+        "nearest_stream_dist_km": nearest_stream_dist_km,   # float or None
+        "nearest_stream_feature": nearest_stream_feature,    # GeoJSON feature or None
         "water_quality": wq_data,
         "traffic": traffic_data
     }
 
 
-# API endpoint — returns JSON (kept for any future use)
+# --- GPT-4o suggestions ---
+# lazy init so .env loads before we create the client
+_openai_client = None
+def _get_openai():
+    global _openai_client
+    if _openai_client is None:
+        _openai_client = openai.OpenAI()
+    return _openai_client
+
+# build a prompt with real data and ask GPT for actionable suggestions
+def get_suggestions(impact_score, discharge_count, road_density, water_quality, precip_forecast):
+    prompt = (
+        f"You are a salmon habitat conservation advisor. Given this data:\n"
+        f"- Danger score: {impact_score}/100\n"
+        f"- Stormwater discharge points nearby: {discharge_count}\n"
+        f"- Road density: {road_density}\n"
+        f"- Water quality: {water_quality}\n"
+        f"- Precipitation forecast: {precip_forecast}\n\n"
+        "Give exactly two sets of bullet-point suggestions. Each suggestion MUST include "
+        "specific numbers, percentages, or measurable actions based on the data above. "
+        "For example: 'Reducing impervious surface by 15% in this area would cut runoff volume by ~20%.' "
+        "Do NOT write generic advice. Reference the actual numbers provided.\n\n"
+        "1. COMMUNITY: 2-3 bullet points a regular person can act on, with concrete numbers.\n"
+        "2. SCIENTIST: 2-3 bullet points for a conservation scientist, with technical specifics.\n\n"
+        "Return JSON with keys \"community\" and \"scientist\". Each value is a string "
+        "with bullet points separated by newlines, each starting with •"
+    )
+    try:
+        resp = _get_openai().chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},  # forces valid JSON output
+            temperature=0.7,
+            max_tokens=300,
+        )
+        return json.loads(resp.choices[0].message.content)  # parse JSON response
+    except Exception as e:
+        print(f"GPT suggestion error: {e}")
+        return {"community": None, "scientist": None}  # graceful fallback
+
+
+# --- JSON API endpoint (for programmatic access) ---
 @app.route("/analyze", methods=["POST"])
 def analyze():
     try:
@@ -348,25 +375,38 @@ def analyze():
     except (KeyError, ValueError):
         return jsonify({"error": "Invalid or missing coordinates"}), 400
 
-    return jsonify(run_analysis(lat, lon))
+    data = run_analysis(lat, lon)
+    data["suggestions"] = get_suggestions(  # append GPT suggestions
+        impact_score=data["impact_score"],
+        discharge_count=len(data["nearby_stormwater"]),
+        road_density=data.get("traffic"),
+        water_quality=data.get("water_quality"),
+        precip_forecast="see legend",
+    )
+    return jsonify(data)
 
 
-# results page — runs analysis and renders the HTML template
+# --- results page (the main user-facing page) ---
 @app.route("/results")
 def results():
     try:
-        lat = float(request.args.get("lat"))
+        lat = float(request.args.get("lat"))  # from URL ?lat=...&lon=...
         lon = float(request.args.get("lon"))
     except (TypeError, ValueError):
         return "Missing or invalid lat/lon", 400
 
-    # run the analysis
-    data = run_analysis(lat, lon)
+    data = run_analysis(lat, lon)       # run spatial analysis
+    data["suggestions"] = get_suggestions(  # get GPT suggestions
+        impact_score=data["impact_score"],
+        discharge_count=len(data["nearby_stormwater"]),
+        road_density=data.get("traffic"),
+        water_quality=data.get("water_quality"),
+        precip_forecast="see legend",
+    )
 
-    # pass everything to the template
+    # pass all data to the Jinja2 template as JSON strings
     return render_template("results.html",
-        lat=lat,
-        lon=lon,
+        lat=lat, lon=lon,
         streams_json=json.dumps(data["nearby_streams"]),
         stormwater_json=json.dumps(data["nearby_stormwater"]),
         watersheds_json=json.dumps(data["nearby_watersheds"]),
@@ -376,51 +416,48 @@ def results():
         nearest_stream_feature_json=json.dumps(data["nearest_stream_feature"]),
         nearest_stream_dist_km=data["nearest_stream_dist_km"],
         water_quality_json=json.dumps(data["water_quality"]),
-        traffic_json=json.dumps(data["traffic"])
+        traffic_json=json.dumps(data["traffic"]),
+        suggestions=data.get("suggestions", {})
     )
 
 # --- NLCD impervious surface tile endpoint ---
-# path to the 2024 fractional impervious surface GeoTIFF
+# source GeoTIFF — 2024 fractional impervious surface data (Albers projection)
 NLCD_TIFF = "data/NLCD_b812e669-a6c9-44dd-a6b7-127872e98e5c/Annual_NLCD_FctImp_2024_CU_C1V1_b812e669-a6c9-44dd-a6b7-127872e98e5c.tiff"
 
-# color ramp: 0% impervious = transparent, 100% = dark red
-# matches standard NLCD impervious palette
+# convert impervious % values (0-100) to colored RGBA pixels
 def impervious_to_rgba(band):
-    """Convert a uint8 impervious % array to an RGBA image array."""
     h, w = band.shape
     rgba = np.zeros((h, w, 4), dtype=np.uint8)
-    mask = band > 0  # only color pixels with some impervious cover
+    mask = band > 0  # skip fully pervious (natural) areas
     pct = band[mask].astype(float) / 100.0
-    # gradient: green(low) -> yellow(mid) -> red(high)
-    rgba[mask, 0] = (pct * 255).astype(np.uint8)           # R increases
-    rgba[mask, 1] = ((1 - pct) * 200).astype(np.uint8)     # G decreases
-    rgba[mask, 2] = 30                                       # B constant
-    rgba[mask, 3] = (60 + pct * 140).astype(np.uint8)       # alpha: 60-200
+    # color gradient: green (low%) -> yellow (mid%) -> red (high%)
+    rgba[mask, 0] = (pct * 255).astype(np.uint8)           # red channel up
+    rgba[mask, 1] = ((1 - pct) * 200).astype(np.uint8)     # green channel down
+    rgba[mask, 2] = 30                                       # blue constant
+    rgba[mask, 3] = (60 + pct * 140).astype(np.uint8)       # more opaque at high %
     return rgba
 
+# serves a PNG image of impervious surface for the current map view
 @app.route("/nlcd_tile")
 def nlcd_tile():
-    """Serve a reprojected PNG overlay of NLCD impervious surface.
-    Query params: west, south, east, north (EPSG:4326), width, height in px.
-    Reprojects from the source Albers CRS to EPSG:4326 so it aligns with Leaflet.
-    """
     try:
+        # bounding box from the frontend (in lat/lon degrees)
         west = float(request.args["west"])
         south = float(request.args["south"])
         east = float(request.args["east"])
         north = float(request.args["north"])
-        width = int(request.args.get("width", 512))
-        height = int(request.args.get("height", 512))
+        width = int(request.args.get("width", 512))   # output image width
+        height = int(request.args.get("height", 512))  # output image height
     except (KeyError, ValueError):
         return "Missing bbox params", 400
 
-    # convert 4326 bbox to 3857 (Web Mercator) — matches Leaflet's internal projection
+    # reproject bbox to Web Mercator (EPSG:3857) to match Leaflet tiles
     merc_bounds = transform_bounds("EPSG:4326", "EPSG:3857", west, south, east, north)
-    dst_transform = from_bounds(*merc_bounds, width, height)
-    dst_array = np.zeros((height, width), dtype=np.uint8)
+    dst_transform = from_bounds(*merc_bounds, width, height)  # pixel-to-coordinate mapping
+    dst_array = np.zeros((height, width), dtype=np.uint8)     # output raster
 
     with rasterio.open(NLCD_TIFF) as src:
-        # reproject source raster into 3857 grid so pixels align with Leaflet
+        # warp from source CRS (Albers) to 3857 so it lines up on the map
         reproject(
             source=rasterio.band(src, 1),
             destination=dst_array,
@@ -429,7 +466,7 @@ def nlcd_tile():
             resampling=Resampling.bilinear,
         )
 
-    # convert to colored RGBA PNG
+    # colorize and send as a transparent PNG
     rgba = impervious_to_rgba(dst_array)
     img = Image.fromarray(rgba, "RGBA")
     buf = BytesIO()
@@ -438,6 +475,6 @@ def nlcd_tile():
     return send_file(buf, mimetype="image/png")
 
 
-# allows running the app directly with "python app.py" instead of "flask run"
+# run with: python app.py (starts on http://localhost:5000)
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

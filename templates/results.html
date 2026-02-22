@@ -25,51 +25,59 @@
     <!-- leaflet map fills this div -->
     <div id="results-map"></div>
 
-    <!-- inline styles for popup cards and legend -->
+    <!-- styles for map popups, legend, layer panel, and suggestions -->
     <style>
-        /* styled popup card */
+        /* popup card that appears when clicking a stream/point */
         .popup-card { font-family: 'Lato', sans-serif; min-width: 200px; }
         .popup-card h3 { margin: 0 0 6px; font-size: 14px; }
         .popup-card p { margin: 2px 0; font-size: 12px; color: #444; }
         .popup-card .risk-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
-        .popup-card .risk-red { background: #e63946; }
-        .popup-card .risk-yellow { background: #fb8500; color: #1b1b1b; }
-        .popup-card .risk-green { background: #2a9d8f; }
+        .popup-card .risk-red { background: #e63946; }     /* high risk */
+        .popup-card .risk-yellow { background: #fb8500; color: #1b1b1b; } /* moderate */
+        .popup-card .risk-green { background: #2a9d8f; }   /* low risk */
         .popup-card .divider { border-top: 1px solid #eee; margin: 6px 0; }
 
-        /* legend control */
+        /* legend box (top-right of map) */
         .map-legend { background: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-family: 'Lato', sans-serif; font-size: 12px; line-height: 1.8; }
         .map-legend h4 { margin: 0 0 6px; font-size: 13px; }
         .map-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
         .map-legend .line { width: 18px; height: 4px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
 
-        /* layer filter panel */
+        /* layer toggle panel (top-left of map) */
         .layer-panel { background: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-family: 'Lato', sans-serif; font-size: 12px; line-height: 2; }
         .layer-panel h4 { margin: 0 0 4px; font-size: 13px; }
         .layer-panel label { display: block; cursor: pointer; }
         .layer-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
 
-        /* NLCD gradient bar in legend */
+        /* GPT suggestions section below the map */
+        .suggestions-card { padding: 16px 0; margin: 20px 0; }
+        .suggestions-card h3 { margin: 0 0 12px; font-size: 16px; }
+        .suggestions-card .suggestion { margin-bottom: 16px; }
+        .suggestions-card .suggestion:last-child { margin-bottom: 0; }
+        .suggestions-card h4 { margin: 0 0 6px; font-size: 14px; }
+        .suggestions-card p { margin: 0; font-size: 13px; color: #444; line-height: 1.7; white-space: pre-line; }
+
+        /* color bar showing impervious surface gradient in legend */
         .nlcd-gradient { width: 100px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 6px;
             background: linear-gradient(to right, rgba(0,200,30,0.4), rgba(200,100,30,0.7), rgba(255,0,30,0.9)); }
     </style>
 
     <script>
-        // data passed from Flask (already JSON)
-        var streams = {{ streams_json | safe }};
-        var stormwater = {{ stormwater_json | safe }};
-        var watershedFeatures = {{ watersheds_json | safe }};
-        var waterQuality = {{ water_quality_json | default('null') | safe }};
-        var trafficData = {{ traffic_json | default('null') | safe }};
-        var userLat = {{ lat }};
-        var userLon = {{ lon }};
-        var drainCount = stormwater.length;
+        // --- data injected from Flask backend (Jinja2 fills these in) ---
+        var streams = {{ streams_json | safe }};            // nearby salmon stream features
+        var stormwater = {{ stormwater_json | safe }};      // nearby stormwater discharge points
+        var watershedFeatures = {{ watersheds_json | safe }};// watershed boundary polygons
+        var waterQuality = {{ water_quality_json | default('null') | safe }};  // water quality data or null
+        var trafficData = {{ traffic_json | default('null') | safe }};         // traffic exposure or null
+        var userLat = {{ lat }};    // user's latitude
+        var userLon = {{ lon }};    // user's longitude
+        var drainCount = stormwater.length;  // total discharge points within 1km
 
-        // risk color hex lookup and labels
+        // color and label mappings for risk levels
         var riskColors = { red: "#e63946", yellow: "#fb8500", green: "#2a9d8f" };
         var riskLabels = { red: "High", yellow: "Moderate", green: "Low" };
 
-        // helper: distance in meters between two lat/lon points
+        // haversine formula: distance in meters between two lat/lon points
         function distanceMeters(lat1, lon1, lat2, lon2) {
             var R = 6371000;
             var dLat = (lat2 - lat1) * Math.PI / 180;
@@ -88,15 +96,16 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // --- watershed layer (togglable) ---
+        // --- watershed boundary polygons (togglable via checkbox) ---
         var wsPalette = ["#264653","#2a9d8f","#e9c46a","#f4a261","#e76f51","#6a4c93","#1982c4","#8ac926"];
-        var watershedGroup = L.layerGroup(); // holds all watershed polygons
+        var watershedGroup = L.layerGroup(); // container for all watershed layers
         watershedFeatures.forEach(function(feature, i) {
-            var color = wsPalette[i % wsPalette.length];
+            var color = wsPalette[i % wsPalette.length]; // cycle through colors
             var name = feature.properties.Name || "Unknown";
             var area = feature.properties.AreaSqKm ? parseFloat(feature.properties.AreaSqKm).toFixed(1) + " km²" : "N/A";
             var huc = feature.properties.HUC12 || "";
 
+            // draw the watershed polygon with dashed border
             var layer = L.geoJSON(feature, {
                 style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.15, dashArray: "6 4" }
             });
@@ -107,30 +116,30 @@
                 '  <p>Area: <strong>' + area + '</strong></p>' +
                 '</div>'
             );
+            // highlight on hover
             layer.on("mouseover", function() { layer.setStyle({ fillOpacity: 0.3, weight: 3 }); });
             layer.on("mouseout", function() { layer.setStyle({ fillOpacity: 0.15, weight: 2 }); });
-            watershedGroup.addLayer(layer);
+            watershedGroup.addLayer(layer); // add to the togglable group
         });
 
         // --- NLCD impervious surface overlay (togglable) ---
-        var nlcdOverlay = null; // will hold the current ImageOverlay
+        var nlcdOverlay = null; // current image overlay on the map
 
-        // fetch and render the NLCD tile for the current map view
+        // request a new NLCD PNG from the server for current map bounds
         function loadNlcdOverlay() {
             var b = map.getBounds();
             var size = map.getSize();
             var url = "/nlcd_tile?west=" + b.getWest() + "&south=" + b.getSouth() +
                       "&east=" + b.getEast() + "&north=" + b.getNorth() +
                       "&width=" + size.x + "&height=" + size.y;
-            // remove old overlay before adding new one
-            if (nlcdOverlay) map.removeLayer(nlcdOverlay);
+            if (nlcdOverlay) map.removeLayer(nlcdOverlay); // remove stale overlay
             nlcdOverlay = L.imageOverlay(url, b, { opacity: 0.7, interactive: false });
             nlcdOverlay.addTo(map);
         }
 
-        var nlcdEnabled = false; // tracks checkbox state
+        var nlcdEnabled = false; // whether the NLCD checkbox is on
 
-        // reload NLCD when map moves (only if enabled)
+        // refresh NLCD overlay when user pans/zooms the map
         map.on("moveend", function() {
             if (nlcdEnabled) loadNlcdOverlay();
         });
@@ -139,7 +148,7 @@
         L.marker([userLat, userLon]).addTo(map)
             .bindPopup("Your location").openPopup();
 
-        // --- layer filter panel (top-left) ---
+        // --- checkbox panel to toggle optional layers ---
         var filterPanel = L.control({ position: "topleft" });
         filterPanel.onAdd = function() {
             var div = L.DomUtil.create("div", "layer-panel");
@@ -147,31 +156,31 @@
                 '<h4>Layers</h4>' +
                 '<label><input type="checkbox" id="toggle-watersheds"> Watershed Boundaries</label>' +
                 '<label><input type="checkbox" id="toggle-nlcd"> Impervious Surface (NLCD)</label>';
-            L.DomEvent.disableClickPropagation(div);
+            L.DomEvent.disableClickPropagation(div); // prevent map clicks when clicking panel
             return div;
         };
         filterPanel.addTo(map);
 
-        // watershed toggle
+        // toggle watershed polygons on/off
         document.getElementById("toggle-watersheds").addEventListener("change", function() {
             if (this.checked) map.addLayer(watershedGroup);
             else map.removeLayer(watershedGroup);
-            rebuildLegend();
+            rebuildLegend(); // update legend to show/hide watershed entries
         });
 
-        // NLCD toggle
+        // toggle NLCD impervious overlay on/off
         document.getElementById("toggle-nlcd").addEventListener("change", function() {
             nlcdEnabled = this.checked;
             if (nlcdEnabled) loadNlcdOverlay();
             else if (nlcdOverlay) { map.removeLayer(nlcdOverlay); nlcdOverlay = null; }
-            rebuildLegend();
+            rebuildLegend(); // update legend to show/hide gradient bar
         });
 
-        // --- async-fetched legend values (persist across rebuildLegend calls) ---
+        // these hold async-fetched values so they survive legend rebuilds
         var roadDensityHtml = '<em>loading\u2026</em>';
         var weatherHtml = '<em>loading\u2026</em>';
 
-        // --- dynamic legend (top-right) — rebuilds when layers toggle ---
+        // --- legend control (top-right) — rebuilt whenever a layer toggles ---
         var legendDiv = null;
         var legendControl = L.control({ position: "topright" });
         legendControl.onAdd = function() {
@@ -181,6 +190,7 @@
         };
         legendControl.addTo(map);
 
+        // rebuild the entire legend HTML (called on toggle and async data arrival)
         function rebuildLegend() {
             if (!legendDiv) return;
             var html =
@@ -190,7 +200,7 @@
                 '<span class="line" style="background:#fb8500"></span> Moderate Risk Stream<br>' +
                 '<span class="line" style="background:#2a9d8f"></span> Low Risk Stream';
 
-            // watershed entries — only when layer is on
+            // show watershed colors only when that layer is enabled
             if (document.getElementById("toggle-watersheds") && document.getElementById("toggle-watersheds").checked) {
                 html += '<br><strong style="font-size:11px;margin-top:4px;display:inline-block;">Watersheds</strong>';
                 watershedFeatures.forEach(function(f, i) {
@@ -200,13 +210,13 @@
                 });
             }
 
-            // NLCD gradient — only when layer is on
+            // show impervious surface gradient only when that layer is enabled
             if (document.getElementById("toggle-nlcd") && document.getElementById("toggle-nlcd").checked) {
                 html += '<br><strong style="font-size:11px;margin-top:4px;display:inline-block;">Impervious Surface</strong>';
                 html += '<br><span class="nlcd-gradient"></span> 0 – 100%';
             }
 
-            // water quality entry (always shown if data exists)
+            // water quality: color-coded by rank (1-10 scale)
             if (waterQuality) {
                 var wqRank = waterQuality.max_rank;
                 var wqColor = wqRank <= 4 ? '#2a9d8f' : wqRank <= 7 ? '#fb8500' : '#e63946';
@@ -218,7 +228,7 @@
                         (waterQuality.total_impairments !== 1 ? 's' : '') + ' detected</span>';
             }
 
-            // heavy traffic entry (always shown if data exists)
+            // traffic exposure: color-coded by Environmental Health Disparities rank
             if (trafficData) {
                 var tRank = trafficData.ehd_rank;
                 var tColor = tRank <= 4 ? '#2a9d8f' : tRank <= 7 ? '#fb8500' : '#e63946';
@@ -240,10 +250,11 @@
             legendDiv.innerHTML = html;
         }
 
-        // --- fetch road density from Overpass API (OSM) within 500m ---
+        // --- road density from OpenStreetMap (Overpass API, 500m radius) ---
         (function() {
-            var RADIUS = 500;
-            var AREA_KM2 = Math.PI * (RADIUS / 1000) * (RADIUS / 1000);
+            var RADIUS = 500; // meters
+            var AREA_KM2 = Math.PI * (RADIUS / 1000) * (RADIUS / 1000); // circle area
+            // query all roads within 500m of user
             var query = '[out:json][timeout:15];(way["highway"](around:' + RADIUS + ',' +
                         userLat + ',' + userLon + '););out geom;';
             fetch('https://overpass-api.de/api/interpreter', {
@@ -253,8 +264,9 @@
             })
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                var totalM = 0;
+                var totalM = 0; // total road length in meters
                 var elements = data.elements || [];
+                // sum up the length of each road segment
                 elements.forEach(function(way) {
                     if (!way.geometry || way.geometry.length < 2) return;
                     for (var i = 0; i < way.geometry.length - 1; i++) {
@@ -265,9 +277,9 @@
                     }
                 });
                 if (elements.length === 0) {
-                    roadDensityHtml = 'unavailable';
+                    roadDensityHtml = 'unavailable'; // no OSM data here
                 } else {
-                    var density = (totalM / 1000) / AREA_KM2;
+                    var density = (totalM / 1000) / AREA_KM2; // km of road per km²
                     var label, color;
                     if (density < 5)       { label = 'Low';      color = '#2a9d8f'; }
                     else if (density < 15) { label = 'Moderate'; color = '#fb8500'; }
@@ -275,7 +287,7 @@
                     roadDensityHtml = '<strong style="color:' + color + '">' + label + '</strong>' +
                                       ' \u2014 ' + density.toFixed(1) + ' km/km\u00B2';
                 }
-                rebuildLegend();
+                rebuildLegend(); // update legend with the result
             })
             .catch(function() {
                 roadDensityHtml = 'unavailable';
@@ -283,7 +295,7 @@
             });
         })();
 
-        // --- fetch 3-day precipitation forecast from Open-Meteo (no API key needed) ---
+        // --- 3-day precipitation forecast from Open-Meteo (free, no API key) ---
         (function() {
             var url = 'https://api.open-meteo.com/v1/forecast' +
                       '?latitude=' + userLat + '&longitude=' + userLon +
@@ -292,9 +304,9 @@
             fetch(url)
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                var days  = data.daily.time;
-                var precip = data.daily.precipitation_sum;
-                var prob   = data.daily.precipitation_probability_max;
+                var days  = data.daily.time;            // ["2026-02-22", ...]
+                var precip = data.daily.precipitation_sum;  // inches per day
+                var prob   = data.daily.precipitation_probability_max; // % chance
                 var dayNames = ['Today', 'Tomorrow', days[2] ? days[2].slice(5) : 'Day 3'];
                 var rows = '';
                 for (var i = 0; i < 3; i++) {
@@ -303,7 +315,7 @@
                     rows += dayNames[i] + ': <strong>' + pct + '% chance</strong>, ' + p + ' in<br>';
                 }
                 weatherHtml = rows;
-                rebuildLegend();
+                rebuildLegend(); // update legend with forecast
             })
             .catch(function() {
                 weatherHtml = 'unavailable';
@@ -317,12 +329,12 @@
             var color = riskColors[risk] || "#2a9d8f";
             var name = feature.properties.LLID_STRM_NAME || "Salmon stream";
 
-            // find closest point on stream to user
+            // find the closest point on this stream to the user
             var coords = feature.geometry.coordinates;
             var dist = Infinity;
             for (var ci = 0; ci < coords.length; ci++) {
                 var d = distanceMeters(userLat, userLon, coords[ci][1], coords[ci][0]);
-                if (d < dist) dist = d;
+                if (d < dist) dist = d; // keep the minimum
             }
             dist = Math.round(dist);
 
@@ -354,13 +366,13 @@
                 '  <p style="font-size:11px;color:#888;">Watershed: ' + (feature.properties.watershed_name || "Unknown") + '</p>' +
                 '</div>';
 
+            // draw the stream line on the map
             var layer = L.geoJSON(feature, {
                 style: { color: color, weight: 5, opacity: 0.9 }
             }).addTo(map);
-
             layer.bindPopup(popup);
 
-            // hover: thicken line and brighten, pointer cursor
+            // thicken line on hover for visibility
             layer.on("mouseover", function(e) {
                 layer.setStyle({ weight: 8, opacity: 1 });
                 e.target._path && (e.target._path.style.cursor = "pointer");
@@ -371,15 +383,15 @@
             });
         });
 
-        // --- draw stormwater discharge points ---
+        // --- draw stormwater discharge points as purple circles ---
         stormwater.forEach(function(feature) {
             var coords = feature.geometry && feature.geometry.coordinates;
-            if (!coords) return;
+            if (!coords) return; // skip if no geometry
 
             var dist = Math.round(distanceMeters(userLat, userLon, coords[1], coords[0]));
             var dname = feature.properties.DischargeName || "Unnamed";
 
-            // risk contribution message
+            // explain how many drains contribute to the score
             var contribution = drainCount + " discharge point" + (drainCount !== 1 ? "s" : "") +
                 " within 1 km — adds up to " + Math.min(30, drainCount * 5) + " pts to the impact score.";
 
@@ -413,16 +425,16 @@
             });
         });
 
-        // --- if no nearby streams, draw the nearest one + dashed line ---
-        var nearestPoint = {{ nearest_stream_point | safe }};
+        // --- fallback: draw nearest stream if none within 1km ---
+        var nearestPoint = {{ nearest_stream_point | safe }};           // [lat, lon] or null
         var nearestStreamFeature = {{ nearest_stream_feature_json | default('null') | safe }};
         if (nearestPoint) {
-            // dashed line from user to nearest point on stream
+            // dashed red line from user to the closest point on the stream
             L.polyline([[userLat, userLon], nearestPoint], {
                 color: "#e63946", weight: 3, dashArray: "10, 8", opacity: 0.8
             }).addTo(map);
 
-            // draw the actual stream line
+            // draw the full stream geometry so user can see it
             if (nearestStreamFeature) {
                 var risk = nearestStreamFeature.properties.riskColor || "red";
                 var sColor = riskColors[risk] || "#e63946";
@@ -449,7 +461,7 @@
                 );
             }
 
-            // zoom to show both user and stream
+            // auto-zoom to fit both user location and nearest stream
             map.fitBounds([
                 [userLat, userLon], nearestPoint
             ], { padding: [50, 50] });
@@ -612,8 +624,29 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+    <!-- Google Maps JS for address autocomplete -->
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA8AfiCIiL8W1Q6CNiTGfFVxur20jb3eP8&callback=initMap&libraries=places&v=weekly" defer></script>
 
+    <!-- AI-generated suggestions for this location -->
+    {% if suggestions %}
+    <div class="suggestions-card">
+        <h3>What You Can Do Here</h3>
+        {% if suggestions.community %}
+        <div class="suggestion">
+            <h4>For Community Members</h4>
+            <p>{{ suggestions.community }}</p>
+        </div>
+        {% endif %}
+        {% if suggestions.scientist %}
+        <div class="suggestion">
+            <h4>For Conservation Scientists</h4>
+            <p>{{ suggestions.scientist }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+        <!-- FAQ section -->
         <div>
         <h3>How do we calculate the danger score?</h3>
         <p>Our danger score is calculated based on a the weighted sum of several factors including proximity to heavy traffic roadways, impervious surface area, storm drain density, watershed characteristics, and water quality metrics.</p>

@@ -1,9 +1,8 @@
-// This example requires the Places library. Include the libraries=places
-// parameter when you first load the API. For example:
-// <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=places">
+// Google Places autocomplete — lets users type an address and redirects to results
 function initMap() {
   const mapEl = document.getElementById("map");
 
+  // optional preview map on the home page
   let map, marker;
   if (mapEl) {
     map = new google.maps.Map(mapEl, {
@@ -14,6 +13,7 @@ function initMap() {
     marker = new google.maps.Marker({ map });
   }
 
+  // attach autocomplete widget to the search container
   const pacContainer = document.getElementById("pac-container");
   const autocomplete = new google.maps.places.PlaceAutocompleteElement();
   pacContainer.replaceChildren(autocomplete);
@@ -22,11 +22,12 @@ function initMap() {
   const useLocationBtn = document.getElementById("use-location");
   const readout = document.getElementById("location-readout");
 
+  // navigate to results page with lat/lon
   function showLocation(lat, lng, label = "Your location") {
-    // redirect to results page with coordinates
     window.location.href = `/results?lat=${lat}&lon=${lng}`;
   }
 
+  // "Use My Location" button — gets GPS coordinates from the browser
   if (useLocationBtn) {
     useLocationBtn.addEventListener("click", () => {
       if (!navigator.geolocation) {
@@ -46,11 +47,11 @@ function initMap() {
     });
   }
 
+  // when user picks an address from autocomplete dropdown
   autocomplete.addEventListener("gmp-select", async ({ placePrediction }) => {
-    if (!placePrediction) {
-      return;
-    }
+    if (!placePrediction) return;
 
+    // fetch the full place details (lat/lon)
     const place = placePrediction.toPlace();
     await place.fetchFields({
       fields: ["location", "formattedAddress", "displayName"],
@@ -61,10 +62,12 @@ function initMap() {
       return;
     }
 
+    // redirect to results with the selected coordinates
     const lat = place.location.lat();
     const lng = place.location.lng();
     window.location.href = `/results?lat=${lat}&lon=${lng}`;
   });
 }
 
+// make initMap available as a global callback for Google Maps script
 window.initMap = initMap;
