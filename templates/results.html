@@ -20,12 +20,47 @@
     <!-- leaflet map fills this div -->
     <div id="results-map"></div>
 
+    <!-- inline styles for popup cards and legend -->
+    <style>
+        /* styled popup card */
+        .popup-card { font-family: 'Lato', sans-serif; min-width: 200px; }
+        .popup-card h3 { margin: 0 0 6px; font-size: 14px; }
+        .popup-card p { margin: 2px 0; font-size: 12px; color: #444; }
+        .popup-card .risk-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; }
+        .popup-card .risk-red { background: #e63946; }
+        .popup-card .risk-yellow { background: #fb8500; color: #1b1b1b; }
+        .popup-card .risk-green { background: #2a9d8f; }
+        .popup-card .divider { border-top: 1px solid #eee; margin: 6px 0; }
+
+        /* legend control */
+        .map-legend { background: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-family: 'Lato', sans-serif; font-size: 12px; line-height: 1.8; }
+        .map-legend h4 { margin: 0 0 6px; font-size: 13px; }
+        .map-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+        .map-legend .line { width: 18px; height: 4px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+    </style>
+
     <script>
         // data passed from Flask (already JSON)
         var streams = {{ streams_json | safe }};
         var stormwater = {{ stormwater_json | safe }};
         var userLat = {{ lat }};
         var userLon = {{ lon }};
+        var drainCount = stormwater.length;
+
+        // risk color hex lookup and labels
+        var riskColors = { red: "#e63946", yellow: "#fb8500", green: "#2a9d8f" };
+        var riskLabels = { red: "High", yellow: "Moderate", green: "Low" };
+
+        // helper: distance in meters between two lat/lon points
+        function distanceMeters(lat1, lon1, lat2, lon2) {
+            var R = 6371000;
+            var dLat = (lat2 - lat1) * Math.PI / 180;
+            var dLon = (lon2 - lon1) * Math.PI / 180;
+            var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+                    Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
 
         // create the map centered on the user's location
         var map = L.map('results-map').setView([userLat, userLon], 14);
@@ -39,63 +74,105 @@
         L.marker([userLat, userLon]).addTo(map)
             .bindPopup("Your location").openPopup();
 
-        // map risk names to vibrant colors
-        var riskColors = { red: "#e63946", yellow: "#fb8500", green: "#2a9d8f" };
+        // --- legend control (top-right) ---
+        var legend = L.control({ position: "topright" });
+        legend.onAdd = function() {
+            var div = L.DomUtil.create("div", "map-legend");
+            div.innerHTML =
+                '<h4>Legend</h4>' +
+                '<i style="background:#7b2cbf"></i> Stormwater Discharge Point<br>' +
+                '<span class="line" style="background:#e63946"></span> High Risk Stream<br>' +
+                '<span class="line" style="background:#fb8500"></span> Moderate Risk Stream<br>' +
+                '<span class="line" style="background:#2a9d8f"></span> Low Risk Stream';
+            return div;
+        };
+        legend.addTo(map);
 
-        // draw each salmon stream, colored by risk
+        // --- draw each salmon stream ---
         streams.forEach(function(feature) {
-            var color = riskColors[feature.properties.riskColor] || "#2a9d8f";
+            var risk = feature.properties.riskColor || "green";
+            var color = riskColors[risk] || "#2a9d8f";
             var name = feature.properties.LLID_STRM_NAME || "Salmon stream";
-            var species = feature.properties.SPECIES || "";
+            var species = feature.properties.SPECIES || "Unknown";
+
+            // find the midpoint of the stream to calculate distance
+            var coords = feature.geometry.coordinates;
+            var mid = coords[Math.floor(coords.length / 2)];
+            var dist = Math.round(distanceMeters(userLat, userLon, mid[1], mid[0]));
+
+            // styled popup card
+            var popup =
+                '<div class="popup-card">' +
+                '  <h3>' + name + '</h3>' +
+                '  <p>Species: <strong>' + species + '</strong></p>' +
+                '  <p>Risk: <span class="risk-badge risk-' + risk + '">' + riskLabels[risk] + '</span></p>' +
+                '  <div class="divider"></div>' +
+                '  <p>Distance: <strong>' + dist + ' m</strong> from your location</p>' +
+                '  <p style="font-size:11px;color:#888;">This stream is part of the Puget Sound salmon watershed</p>' +
+                '</div>';
 
             var layer = L.geoJSON(feature, {
-                style: { color: color, weight: 5, opacity: 0.9 }
+                style: { color: color, weight: 2, opacity: 0.9 }
             }).addTo(map);
 
-            // popup with stream name and species
-            layer.bindPopup("<b>" + name + "</b>" + (species ? "<br>" + species : ""));
+            layer.bindPopup(popup);
 
-            // highlight on hover: thicker line + white glow
-            layer.on("mouseover", function() {
-                layer.setStyle({ weight: 8, color: "#fff" });
-                setTimeout(function() { layer.setStyle({ weight: 8, color: color }); }, 80);
-                layer.setStyle({ weight: 8 });
+            // hover: thicken line and brighten, pointer cursor
+            layer.on("mouseover", function(e) {
+                layer.setStyle({ weight: 4, opacity: 1 });
+                e.target._path && (e.target._path.style.cursor = "pointer");
             });
-            // reset on mouseout
+            // mouseout: reset
             layer.on("mouseout", function() {
-                layer.setStyle({ weight: 5, color: color, opacity: 0.9 });
+                layer.setStyle({ weight: 2, color: color, opacity: 0.9 });
             });
         });
 
-        // draw stormwater discharge points as purple circle markers
+        // --- draw stormwater discharge points ---
         stormwater.forEach(function(feature) {
             var coords = feature.geometry && feature.geometry.coordinates;
-            if (coords) {
-                var name = feature.properties.DischargeName || "Stormwater discharge";
-                var marker = L.circleMarker([coords[1], coords[0]], {
-                    radius: 8,
-                    color: "#7b2cbf",
-                    fillColor: "#7b2cbf",
-                    fillOpacity: 0.85,
-                    weight: 2
-                }).addTo(map).bindPopup("<b>" + name + "</b>");
+            if (!coords) return;
 
-                // grow on hover
-                marker.on("mouseover", function() {
-                    marker.setRadius(12);
-                    marker.setStyle({ weight: 3, color: "#fff" });
-                });
-                // shrink on mouseout
-                marker.on("mouseout", function() {
-                    marker.setRadius(8);
-                    marker.setStyle({ weight: 2, color: "#7b2cbf" });
-                });
-            }
+            var dist = Math.round(distanceMeters(userLat, userLon, coords[1], coords[0]));
+            var dname = feature.properties.DischargeName || "Unnamed";
+
+            // risk contribution message
+            var contribution = drainCount + " discharge point" + (drainCount !== 1 ? "s" : "") +
+                " within 1 km — adds up to " + Math.min(30, drainCount * 5) + " pts to the impact score.";
+
+            var popup =
+                '<div class="popup-card">' +
+                '  <h3>Stormwater Discharge Point</h3>' +
+                '  <p>ID: <strong>' + dname + '</strong></p>' +
+                '  <div class="divider"></div>' +
+                '  <p>Distance: <strong>' + dist + ' m</strong> from your location</p>' +
+                '  <p style="font-size:11px;color:#888;">' + contribution + '</p>' +
+                '</div>';
+
+            var marker = L.circleMarker([coords[1], coords[0]], {
+                radius: 8,
+                color: "#7b2cbf",
+                fillColor: "#7b2cbf",
+                fillOpacity: 0.85,
+                weight: 2
+            }).addTo(map).bindPopup(popup);
+
+            // hover: grow and highlight
+            marker.on("mouseover", function() {
+                marker.setRadius(12);
+                marker.setStyle({ weight: 3, color: "#fff" });
+                marker._path && (marker._path.style.cursor = "pointer");
+            });
+            // mouseout: shrink back
+            marker.on("mouseout", function() {
+                marker.setRadius(8);
+                marker.setStyle({ weight: 2, color: "#7b2cbf" });
+            });
         });
-        // if no nearby streams, draw a dashed arrow to the nearest one
+
+        // --- if no nearby streams, draw a dashed arrow to the nearest one ---
         var nearestPoint = {{ nearest_stream_point | safe }};
         if (nearestPoint) {
-            // dashed line from user to nearest stream
             L.polyline([[userLat, userLon], nearestPoint], {
                 color: "#e63946",
                 weight: 3,
@@ -103,7 +180,6 @@
                 opacity: 0.8
             }).addTo(map);
 
-            // arrowhead marker at the stream end
             L.circleMarker(nearestPoint, {
                 radius: 7,
                 color: "#e63946",
