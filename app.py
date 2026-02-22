@@ -264,7 +264,9 @@ def run_analysis(lat, lon):
         # nearest stream info (only set when no streams are within 1 km)
         "nearest_stream_point": nearest_stream_point,
         "nearest_stream_dist_km": nearest_stream_dist_km,
-        "water_quality": wq_data
+        "nearest_stream_feature": nearest_stream_feature,
+        "water_quality": wq_data,
+        "traffic": traffic_data
     }
 
 
