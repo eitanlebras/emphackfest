@@ -70,18 +70,21 @@ def geocode_address():
 
 # risk color based on score
 def score_to_color(score):
-    if score >= 70:
+    if score >= 60:
         return "red"
-    elif 70 > score >= 30:
+    elif score >= 30:
         return "yellow"
     else:
         return "green"
 
+
+# per-stream risk color based on its distance and nearby drain count
 def get_risk_color(distance_m, drain_count):
-    # distance-weighted score with a small boost for stormwater drains
-    distance_score = (1 / (distance_m / 100 + 1)) * 70
-    drain_score = min(drain_count, 5) * 6
-    score = max(0, min(100, int(distance_score + drain_score)))
+    # proximity: linearly decreases over 1 km (max 70 pts)
+    proximity = 70 * max(0, 1 - distance_m / 1000)
+    # drain boost: each nearby drain adds 6 pts (max 30 pts)
+    drain_boost = min(30, drain_count * 6)
+    score = max(0, min(100, int(proximity + drain_boost)))
     return score_to_color(score)
 
 
@@ -108,8 +111,14 @@ def run_analysis(lat, lon):
     # distance to the closest stream (default 1km if none found)
     nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000
 
-    # impact score: closer streams + more stormwater drains = higher score (0-100)
-    impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10)))
+    # --- impact score: 3 balanced components (0-100) ---
+    # proximity: closer to a stream = higher impact (max 40 pts)
+    proximity_score = 40 * max(0, 1 - nearest_distance / 1000)
+    # stream density: more streams nearby = more habitat at risk (max 30 pts)
+    density_score = min(30, len(nearby_streams) * 5)
+    # stormwater: more drains = more pollution sources (max 30 pts)
+    stormwater_score = min(30, len(nearby_stormwater) * 5)
+    impact_score = max(0, min(100, int(proximity_score + density_score + stormwater_score)))
 
     # color each stream by its own distance-based risk
     nearby_streams = nearby_streams.copy()
