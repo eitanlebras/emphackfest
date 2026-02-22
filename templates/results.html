@@ -6,8 +6,13 @@
 
     <!-- score panel -->
     <div class="results-panel">
-        <h2>Danger Score: {{ impact_score }}/100</h2>
-        <p>Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
+        {% if nearest_stream_dist_km %}
+            <h2>Danger Score: N/A</h2>
+            <p>Move closer to a salmon stream to see your impact score.</p>
+        {% else %}
+            <h2>Danger Score: {{ impact_score }}/100</h2>
+            <p>Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
+        {% endif %}
     </div>
 
     <!-- alert when no rivers are nearby -->
@@ -421,27 +426,32 @@
             });
         });
 
-        // --- if no nearby streams, draw a dashed arrow to the nearest one ---
+        // --- if no nearby streams, draw the nearest one + dashed line ---
         var nearestPoint = {{ nearest_stream_point | safe }};
+        var nearestStreamFeature = {{ nearest_stream_feature_json | default('null') | safe }};
         if (nearestPoint) {
+            // dashed line from user to nearest point on stream
             L.polyline([[userLat, userLon], nearestPoint], {
-                color: "#e63946",
-                weight: 3,
-                dashArray: "10, 8",
-                opacity: 0.8
+                color: "#e63946", weight: 3, dashArray: "10, 8", opacity: 0.8
             }).addTo(map);
 
-            L.circleMarker(nearestPoint, {
-                radius: 7,
-                color: "#e63946",
-                fillColor: "#e63946",
-                fillOpacity: 1
-            }).addTo(map).bindPopup("Nearest salmon stream");
+            // draw the actual stream line
+            if (nearestStreamFeature) {
+                var risk = nearestStreamFeature.properties.riskColor || "red";
+                var sColor = riskColors[risk] || "#e63946";
+                var sName = nearestStreamFeature.properties.LLID_STRM_NAME || "Nearest stream";
+                L.geoJSON(nearestStreamFeature, {
+                    style: { color: sColor, weight: 5, opacity: 0.9 }
+                }).addTo(map).bindPopup(
+                    '<div class="popup-card"><h3>' + sName + '</h3>' +
+                    '<p>Risk: <span class="risk-badge risk-' + risk + '">' + (riskLabels[risk] || "High") + '</span></p>' +
+                    '<p style="font-size:11px;color:#888;">Watershed: ' + (nearestStreamFeature.properties.watershed_name || "Unknown") + '</p></div>'
+                );
+            }
 
-            // zoom out so both points are visible
+            // zoom to show both user and stream
             map.fitBounds([
-                [userLat, userLon],
-                nearestPoint
+                [userLat, userLon], nearestPoint
             ], { padding: [50, 50] });
         }
     </script>

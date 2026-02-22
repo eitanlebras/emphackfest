@@ -143,16 +143,34 @@ def run_analysis(lat, lon):
     # if no streams within 1 km, find the closest one anywhere
     nearest_stream_point = None
     nearest_stream_dist_km = None
+    nearest_stream_feature = None
     if nearby_streams.empty and not streams_m.empty:
-        # get distance to every stream and pick the closest
         all_distances = streams_m.geometry.distance(user_point_m)
         closest_idx = all_distances.idxmin()
         nearest_stream_dist_km = round(all_distances[closest_idx] / 1000, 1)
-        # get the nearest point on that stream in lat/lon
+        # nearest point on that stream
         closest_geom = streams_m.geometry[closest_idx]
         nearest_pt_m = closest_geom.interpolate(closest_geom.project(user_point_m))
         nearest_pt_4326 = gpd.GeoSeries([nearest_pt_m], crs="EPSG:3857").to_crs(epsg=4326).iloc[0]
         nearest_stream_point = [nearest_pt_4326.y, nearest_pt_4326.x]
+        # also grab the full stream geometry so it can be drawn
+        row = streams.loc[closest_idx]
+        # find which watershed this stream falls in
+        ws_name = None
+        if not watersheds.empty:
+            rep_pt = row.geometry.representative_point()
+            containing = watersheds[watersheds.contains(rep_pt)]
+            if not containing.empty:
+                ws_name = containing.iloc[0].get("Name", None)
+        nearest_stream_feature = {
+            "type": "Feature",
+            "geometry": row.geometry.__geo_interface__,
+            "properties": {
+                "LLID_STRM_NAME": row.get("LLID_STRM_NAME", "Nearest stream"),
+                "riskColor": get_risk_color(all_distances[closest_idx], drain_count),
+                "watershed_name": ws_name,
+            }
+        }
 
     # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
@@ -231,6 +249,7 @@ def run_analysis(lat, lon):
         # nearest stream info (only set when no streams are within 1 km)
         "nearest_stream_point": nearest_stream_point,
         "nearest_stream_dist_km": nearest_stream_dist_km,
+        "nearest_stream_feature": nearest_stream_feature,
         "water_quality": wq_data
     }
 
@@ -269,6 +288,7 @@ def results():
         impact_score=data["impact_score"],
         risk_color=data["risk_color"],
         nearest_stream_point=json.dumps(data["nearest_stream_point"]),
+        nearest_stream_feature_json=json.dumps(data["nearest_stream_feature"]),
         nearest_stream_dist_km=data["nearest_stream_dist_km"],
         water_quality_json=json.dumps(data["water_quality"])
     )
