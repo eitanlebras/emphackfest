@@ -1,4 +1,3 @@
 .env
 __pycache__/
 .claude/
-data/watershed_boundaries.geojson
