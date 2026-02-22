@@ -73,6 +73,11 @@
         var userLon = {{ lon }};    // user's longitude
         var drainCount = stormwater.length;  // total discharge points within 1km
 
+        // server-provided scoring data (moved from client-side fetches)
+        var serverRoadDensity = {{ road_density_value | default('null') | safe }};
+        var serverPrecipData = {{ precipitation_json | default('null') | safe }};
+        var imperviousPct = {{ impervious_pct | default(0) }};
+
         // color and label mappings for risk levels
         var riskColors = { red: "#e63946", yellow: "#fb8500", green: "#2a9d8f" };
         var riskLabels = { red: "High", yellow: "Moderate", green: "Low" };
@@ -176,9 +181,35 @@
             rebuildLegend(); // update legend to show/hide gradient bar
         });
 
-        // these hold async-fetched values so they survive legend rebuilds
-        var roadDensityHtml = '<em>loading\u2026</em>';
-        var weatherHtml = '<em>loading\u2026</em>';
+        // build legend HTML from server-provided data (no more client-side fetches)
+        var roadDensityHtml;
+        if (serverRoadDensity != null) {
+            var rdLabel, rdColor;
+            if (serverRoadDensity < 5)       { rdLabel = 'Low';      rdColor = '#2a9d8f'; }
+            else if (serverRoadDensity < 15) { rdLabel = 'Moderate'; rdColor = '#fb8500'; }
+            else                             { rdLabel = 'High';     rdColor = '#e63946'; }
+            roadDensityHtml = '<strong style="color:' + rdColor + '">' + rdLabel + '</strong>' +
+                              ' \u2014 ' + serverRoadDensity.toFixed(1) + ' km/km\u00B2';
+        } else {
+            roadDensityHtml = 'unavailable';
+        }
+
+        var weatherHtml;
+        if (serverPrecipData) {
+            var days = serverPrecipData.days;
+            var precip = serverPrecipData.precip_inches;
+            var prob = serverPrecipData.precip_prob;
+            var dayNames = ['Today', 'Tomorrow', days[2] ? days[2].slice(5) : 'Day 3'];
+            var rows = '';
+            for (var i = 0; i < 3; i++) {
+                var p = (precip[i] || 0).toFixed(2);
+                var pct = prob[i] != null ? prob[i] : '\u2013';
+                rows += dayNames[i] + ': <strong>' + pct + '% chance</strong>, ' + p + ' in<br>';
+            }
+            weatherHtml = rows;
+        } else {
+            weatherHtml = 'unavailable';
+        }
 
         // --- legend control (top-right) — rebuilt whenever a layer toggles ---
         var legendDiv = null;
@@ -216,6 +247,12 @@
                 html += '<br><span class="nlcd-gradient"></span> 0 – 100%';
             }
 
+            // impervious surface % at user location (from NLCD)
+            var impColor = imperviousPct < 20 ? '#2a9d8f' : imperviousPct < 50 ? '#fb8500' : '#e63946';
+            html += '<br><hr style="margin:6px 0;border:none;border-top:1px solid #eee;">' +
+                    '<span style="font-size:11px;color:#555;">Impervious surface: ' +
+                    '<strong style="color:' + impColor + '">' + imperviousPct + '%</strong></span>';
+
             // water quality: color-coded by rank (1-10 scale)
             if (waterQuality) {
                 var wqRank = waterQuality.max_rank;
@@ -249,79 +286,6 @@
 
             legendDiv.innerHTML = html;
         }
-
-        // --- road density from OpenStreetMap (Overpass API, 500m radius) ---
-        (function() {
-            var RADIUS = 500; // meters
-            var AREA_KM2 = Math.PI * (RADIUS / 1000) * (RADIUS / 1000); // circle area
-            // query all roads within 500m of user
-            var query = '[out:json][timeout:15];(way["highway"](around:' + RADIUS + ',' +
-                        userLat + ',' + userLon + '););out geom;';
-            fetch('https://overpass-api.de/api/interpreter', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: 'data=' + encodeURIComponent(query)
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var totalM = 0; // total road length in meters
-                var elements = data.elements || [];
-                // sum up the length of each road segment
-                elements.forEach(function(way) {
-                    if (!way.geometry || way.geometry.length < 2) return;
-                    for (var i = 0; i < way.geometry.length - 1; i++) {
-                        totalM += distanceMeters(
-                            way.geometry[i].lat, way.geometry[i].lon,
-                            way.geometry[i+1].lat, way.geometry[i+1].lon
-                        );
-                    }
-                });
-                if (elements.length === 0) {
-                    roadDensityHtml = 'unavailable'; // no OSM data here
-                } else {
-                    var density = (totalM / 1000) / AREA_KM2; // km of road per km²
-                    var label, color;
-                    if (density < 5)       { label = 'Low';      color = '#2a9d8f'; }
-                    else if (density < 15) { label = 'Moderate'; color = '#fb8500'; }
-                    else                   { label = 'High';     color = '#e63946'; }
-                    roadDensityHtml = '<strong style="color:' + color + '">' + label + '</strong>' +
-                                      ' \u2014 ' + density.toFixed(1) + ' km/km\u00B2';
-                }
-                rebuildLegend(); // update legend with the result
-            })
-            .catch(function() {
-                roadDensityHtml = 'unavailable';
-                rebuildLegend();
-            });
-        })();
-
-        // --- 3-day precipitation forecast from Open-Meteo (free, no API key) ---
-        (function() {
-            var url = 'https://api.open-meteo.com/v1/forecast' +
-                      '?latitude=' + userLat + '&longitude=' + userLon +
-                      '&daily=precipitation_sum,precipitation_probability_max' +
-                      '&precipitation_unit=inch&timezone=auto&forecast_days=3';
-            fetch(url)
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var days  = data.daily.time;            // ["2026-02-22", ...]
-                var precip = data.daily.precipitation_sum;  // inches per day
-                var prob   = data.daily.precipitation_probability_max; // % chance
-                var dayNames = ['Today', 'Tomorrow', days[2] ? days[2].slice(5) : 'Day 3'];
-                var rows = '';
-                for (var i = 0; i < 3; i++) {
-                    var p = (precip[i] || 0).toFixed(2);
-                    var pct = prob[i] != null ? prob[i] : '–';
-                    rows += dayNames[i] + ': <strong>' + pct + '% chance</strong>, ' + p + ' in<br>';
-                }
-                weatherHtml = rows;
-                rebuildLegend(); // update legend with forecast
-            })
-            .catch(function() {
-                weatherHtml = 'unavailable';
-                rebuildLegend();
-            });
-        })();
 
         // --- draw each salmon stream (already merged by LLID) ---
         streams.forEach(function(feature) {
@@ -391,9 +355,9 @@
             var dist = Math.round(distanceMeters(userLat, userLon, coords[1], coords[0]));
             var dname = feature.properties.DischargeName || "Unnamed";
 
-            // explain how many drains contribute to the score
+            // explain how many drains are nearby
             var contribution = drainCount + " discharge point" + (drainCount !== 1 ? "s" : "") +
-                " within 1 km — adds up to " + Math.min(30, drainCount * 5) + " pts to the impact score.";
+                " within 1 km contribute to the danger score.";
 
             var popup =
                 '<div class="popup-card">' +
@@ -543,6 +507,18 @@
                 <div class="env-card-value" id="traffic-value">—</div>
                 <div class="env-card-sub" id="traffic-sub"></div>
             </div>
+            <!-- road density card -->
+            <div class="env-card" id="road-card">
+                <div class="env-card-label">Road Density (500m)</div>
+                <div class="env-card-value" id="road-value">—</div>
+                <div class="env-card-sub" id="road-sub">km of road per km²</div>
+            </div>
+            <!-- impervious surface card -->
+            <div class="env-card" id="imperv-card">
+                <div class="env-card-label">Impervious Surface</div>
+                <div class="env-card-value" id="imperv-value">—</div>
+                <div class="env-card-sub">At your location (NLCD 2024)</div>
+            </div>
         </div>
     </div>
 
@@ -590,6 +566,30 @@
                 tVal.style.color = "#bbb";
                 tSub.textContent = "Outside coverage area";
             }
+
+            // road density
+            var rdVal = document.getElementById("road-value");
+            var rdSub = document.getElementById("road-sub");
+            var rdCard = document.getElementById("road-card");
+            if (serverRoadDensity != null) {
+                var rdColor = serverRoadDensity < 5 ? "#2a9d8f" : serverRoadDensity < 15 ? "#fb8500" : "#e63946";
+                rdVal.textContent = serverRoadDensity.toFixed(1) + " km/km\u00B2";
+                rdVal.style.color = rdColor;
+                rdSub.textContent = serverRoadDensity < 5 ? "Low density" : serverRoadDensity < 15 ? "Moderate density" : "High density";
+                rdCard.style.borderColor = rdColor;
+            } else {
+                rdVal.textContent = "No data";
+                rdVal.style.color = "#bbb";
+                rdSub.textContent = "Overpass API unavailable";
+            }
+
+            // impervious surface
+            var impVal = document.getElementById("imperv-value");
+            var impCard = document.getElementById("imperv-card");
+            var impClr = imperviousPct < 20 ? "#2a9d8f" : imperviousPct < 50 ? "#fb8500" : "#e63946";
+            impVal.textContent = imperviousPct + "%";
+            impVal.style.color = impClr;
+            impCard.style.borderColor = impClr;
         })();
     </script>
 

@@ -7,7 +7,10 @@ from flask import Flask, render_template, request, jsonify, send_file
 import geopandas as gpd        # geospatial dataframes (like pandas but for maps)
 from shapely.geometry import Point, box  # geometric shapes for spatial queries
 import json
+import math
+from concurrent.futures import ThreadPoolExecutor
 import requests
+import openai
 import pandas as pd
 import rasterio
 from rasterio.warp import transform_bounds, reproject, Resampling, calculate_default_transform
@@ -143,6 +146,97 @@ def _geodf_to_features(gdf):
         gdf[col] = gdf[col].astype(str)  # dates -> strings for JSON
     return json.loads(gdf.to_json())["features"]
 
+# --- server-side data fetchers for scoring ---
+
+# haversine formula (server-side version for road density calc)
+def _haversine(lat1, lon1, lat2, lon2):
+    R = 6371000
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+# fetch road density (km/km²) from Overpass API within 500m
+def fetch_road_density(lat, lon, radius=500):
+    area_km2 = math.pi * (radius / 1000) ** 2
+    query = f'[out:json][timeout:15];(way["highway"](around:{radius},{lat},{lon}););out geom;'
+    try:
+        r = requests.post('https://overpass-api.de/api/interpreter',
+                          data={'data': query}, timeout=20)
+        data = r.json()
+        elements = data.get('elements', [])
+        if not elements:
+            return None
+        total_m = 0
+        for way in elements:
+            geom = way.get('geometry', [])
+            for i in range(len(geom) - 1):
+                total_m += _haversine(geom[i]['lat'], geom[i]['lon'],
+                                      geom[i + 1]['lat'], geom[i + 1]['lon'])
+        return round(total_m / 1000 / area_km2, 1)
+    except Exception:
+        return None
+
+# fetch 3-day precipitation forecast from Open-Meteo (free, no key)
+def fetch_precipitation(lat, lon):
+    try:
+        r = requests.get('https://api.open-meteo.com/v1/forecast', params={
+            'latitude': lat, 'longitude': lon,
+            'daily': 'precipitation_sum,precipitation_probability_max',
+            'precipitation_unit': 'inch',
+            'timezone': 'auto',
+            'forecast_days': 3
+        }, timeout=10)
+        data = r.json()
+        daily = data['daily']
+        return {
+            'days': daily['time'],
+            'precip_inches': daily['precipitation_sum'],
+            'precip_prob': daily['precipitation_probability_max'],
+            'total_inches': round(sum(p or 0 for p in daily['precipitation_sum']), 2)
+        }
+    except Exception:
+        return None
+
+# sample NLCD impervious surface % at a single point
+def sample_impervious(lat, lon):
+    try:
+        with rasterio.open(NLCD_TIFF) as src:
+            xs, ys = rasterio.warp.transform("EPSG:4326", src.crs, [lon], [lat])
+            vals = list(src.sample([(xs[0], ys[0])]))
+            val = int(vals[0][0])
+            return val if 0 <= val <= 100 else 0  # values >100 are NLCD nodata/fill
+    except Exception:
+        return 0
+
+# --- weighted danger score (0-100) from 7 normalized features ---
+def calculate_score(distance_m, discharge_count, road_density, ehd_rank,
+                    impervious_pct, precip_inches, water_quality_score):
+    # normalize each feature to 0-1
+    n_distance = max(0.0, 1 - distance_m / 1000)              # closer = higher risk
+    n_discharge = min(1.0, discharge_count / 8)                # cap at 8 drains
+    n_road = min(1.0, (road_density or 0) / 25)               # cap at 25 km/km²
+    n_traffic = (ehd_rank or 0) / 10                           # 1-10 scale
+    n_imperv = (impervious_pct or 0) / 100                     # 0-100%
+    n_rain = min(1.0, (precip_inches or 0) / 1.5)             # cap at 1.5 in
+    # water quality 0-100 (higher=better), invert so bad water = high risk
+    n_wq = 1 - ((water_quality_score if water_quality_score is not None else 50) / 100)
+
+    # weighted sum (weights sum to 1.0)
+    score = (
+        0.22 * n_distance +
+        0.15 * n_discharge +
+        0.18 * n_road +
+        0.12 * n_traffic +
+        0.13 * n_imperv +
+        0.12 * n_rain +
+        0.08 * n_wq
+    )
+    return max(0, min(100, int(round(score * 100))))
+
+
 # --- main analysis function ---
 def run_analysis(lat, lon):
     user_point = Point(lon, lat)  # shapely point (lon first, lat second)
@@ -152,7 +246,20 @@ def run_analysis(lat, lon):
 
     # early return if no data loaded
     if streams.empty and stormwater.empty:
-        return {"nearby_streams": [], "nearby_stormwater": [], "impact_score": 0, "risk_color": "green"}
+        return {
+            "nearby_streams": [], "nearby_stormwater": [], "nearby_watersheds": [],
+            "impact_score": 0, "risk_color": "green",
+            "nearest_stream_point": None, "nearest_stream_dist_km": None,
+            "nearest_stream_feature": None,
+            "water_quality": None, "traffic": None,
+            "road_density": None, "precipitation": None, "impervious_pct": 0,
+        }
+
+    # start async fetches in background while we do spatial analysis
+    pool = ThreadPoolExecutor(max_workers=3)
+    rd_future = pool.submit(fetch_road_density, lat, lon)
+    precip_future = pool.submit(fetch_precipitation, lat, lon)
+    imperv_future = pool.submit(sample_impervious, lat, lon)
 
     # reproject datasets to meters for distance math
     streams_m = streams.to_crs(epsg=3857) if not streams.empty else streams
@@ -163,12 +270,6 @@ def run_analysis(lat, lon):
     nearby_stormwater = stormwater_m[stormwater_m.geometry.distance(user_point_m) < 1000] if not stormwater_m.empty else stormwater_m
 
     nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000
-
-    # --- impact score (0-100) from 3 components ---
-    proximity_score = 40 * max(0, 1 - nearest_distance / 1000)  # max 40 pts
-    density_score = min(30, len(nearby_streams) * 5)             # max 30 pts
-    stormwater_score = min(30, len(nearby_stormwater) * 5)       # max 30 pts
-    impact_score = max(0, min(100, int(proximity_score + density_score + stormwater_score)))
 
     # assign a risk color to each stream based on distance + drain count
     nearby_streams = nearby_streams.copy()
@@ -310,6 +411,28 @@ def run_analysis(lat, lon):
                 "env_exp_rank": int(tracts["Env_Exp_Rank"].max()),
             }
 
+    # --- collect async results and compute weighted danger score ---
+    road_density_val = rd_future.result()
+    precip_data = precip_future.result()
+    impervious_pct = imperv_future.result()
+    pool.shutdown(wait=False)
+
+    # extract values for the scoring function
+    ehd_rank = traffic_data["ehd_rank"] if traffic_data else None
+    precip_total = precip_data["total_inches"] if precip_data else None
+    # convert rank 1-10 (higher=worse) to quality 0-100 (higher=better)
+    wq_score = round((10 - wq_data["max_rank"]) / 9 * 100) if wq_data else None
+
+    impact_score = calculate_score(
+        distance_m=nearest_distance,
+        discharge_count=drain_count,
+        road_density=road_density_val,
+        ehd_rank=ehd_rank,
+        impervious_pct=impervious_pct,
+        precip_inches=precip_total,
+        water_quality_score=wq_score,
+    )
+
     # pack everything into a dict for the template
     return {
         "nearby_streams": merged_features,
@@ -317,11 +440,14 @@ def run_analysis(lat, lon):
         "nearby_watersheds": nearby_watersheds,
         "impact_score": impact_score,
         "risk_color": score_to_color(impact_score),
-        "nearest_stream_point": nearest_stream_point,       # [lat, lon] or None
-        "nearest_stream_dist_km": nearest_stream_dist_km,   # float or None
-        "nearest_stream_feature": nearest_stream_feature,    # GeoJSON feature or None
+        "nearest_stream_point": nearest_stream_point,
+        "nearest_stream_dist_km": nearest_stream_dist_km,
+        "nearest_stream_feature": nearest_stream_feature,
         "water_quality": wq_data,
-        "traffic": traffic_data
+        "traffic": traffic_data,
+        "road_density": road_density_val,         # km/km² or None
+        "precipitation": precip_data,              # dict with days/inches/prob or None
+        "impervious_pct": impervious_pct,           # 0-100 integer
     }
 
 
@@ -376,12 +502,13 @@ def analyze():
         return jsonify({"error": "Invalid or missing coordinates"}), 400
 
     data = run_analysis(lat, lon)
-    data["suggestions"] = get_suggestions(  # append GPT suggestions
+    precip = data.get("precipitation")
+    data["suggestions"] = get_suggestions(
         impact_score=data["impact_score"],
         discharge_count=len(data["nearby_stormwater"]),
-        road_density=data.get("traffic"),
+        road_density=f"{data['road_density']} km/km²" if data.get('road_density') else "unavailable",
         water_quality=data.get("water_quality"),
-        precip_forecast="see legend",
+        precip_forecast=f"{precip['total_inches']} inches over 3 days" if precip else "unavailable",
     )
     return jsonify(data)
 
@@ -396,12 +523,13 @@ def results():
         return "Missing or invalid lat/lon", 400
 
     data = run_analysis(lat, lon)       # run spatial analysis
-    data["suggestions"] = get_suggestions(  # get GPT suggestions
+    precip = data.get("precipitation")
+    data["suggestions"] = get_suggestions(
         impact_score=data["impact_score"],
         discharge_count=len(data["nearby_stormwater"]),
-        road_density=data.get("traffic"),
+        road_density=f"{data['road_density']} km/km²" if data.get('road_density') else "unavailable",
         water_quality=data.get("water_quality"),
-        precip_forecast="see legend",
+        precip_forecast=f"{precip['total_inches']} inches over 3 days" if precip else "unavailable",
     )
 
     # pass all data to the Jinja2 template as JSON strings
@@ -417,6 +545,9 @@ def results():
         nearest_stream_dist_km=data["nearest_stream_dist_km"],
         water_quality_json=json.dumps(data["water_quality"]),
         traffic_json=json.dumps(data["traffic"]),
+        road_density_value=data["road_density"],
+        precipitation_json=json.dumps(data["precipitation"]),
+        impervious_pct=data["impervious_pct"],
         suggestions=data.get("suggestions", {})
     )
 
