@@ -1,2 +1,5 @@
 data/salmon_streams.geojson filter=lfs diff=lfs merge=lfs -text
+<<<<<<< HEAD
+=======
 data/watershed_boundaries.geojson filter=lfs diff=lfs merge=lfs -text
+>>>>>>> 039f5d1bbfcfb5f0542b773ec633f1b5f79d42a7
