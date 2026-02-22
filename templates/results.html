@@ -37,6 +37,16 @@
         .map-legend h4 { margin: 0 0 6px; font-size: 13px; }
         .map-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
         .map-legend .line { width: 18px; height: 4px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+
+        /* layer filter panel */
+        .layer-panel { background: #fff; padding: 10px 14px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-family: 'Lato', sans-serif; font-size: 12px; line-height: 2; }
+        .layer-panel h4 { margin: 0 0 4px; font-size: 13px; }
+        .layer-panel label { display: block; cursor: pointer; }
+        .layer-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
+
+        /* NLCD gradient bar in legend */
+        .nlcd-gradient { width: 100px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; margin-right: 6px;
+            background: linear-gradient(to right, rgba(0,200,30,0.4), rgba(200,100,30,0.7), rgba(255,0,30,0.9)); }
     </style>
 
     <script>
@@ -71,8 +81,9 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // --- draw watershed boundaries (behind everything else) ---
+        // --- watershed layer (togglable) ---
         var wsPalette = ["#264653","#2a9d8f","#e9c46a","#f4a261","#e76f51","#6a4c93","#1982c4","#8ac926"];
+        var watershedGroup = L.layerGroup(); // holds all watershed polygons
         watershedFeatures.forEach(function(feature, i) {
             var color = wsPalette[i % wsPalette.length];
             var name = feature.properties.Name || "Unknown";
@@ -81,8 +92,7 @@
 
             var layer = L.geoJSON(feature, {
                 style: { color: color, weight: 2, fillColor: color, fillOpacity: 0.15, dashArray: "6 4" }
-            }).addTo(map);
-
+            });
             layer.bindPopup(
                 '<div class="popup-card">' +
                 '  <h3>' + name + ' Watershed</h3>' +
@@ -90,35 +100,110 @@
                 '  <p>Area: <strong>' + area + '</strong></p>' +
                 '</div>'
             );
-
             layer.on("mouseover", function() { layer.setStyle({ fillOpacity: 0.3, weight: 3 }); });
             layer.on("mouseout", function() { layer.setStyle({ fillOpacity: 0.15, weight: 2 }); });
+            watershedGroup.addLayer(layer);
+        });
+
+        // --- NLCD impervious surface overlay (togglable) ---
+        var nlcdOverlay = null; // will hold the current ImageOverlay
+
+        // fetch and render the NLCD tile for the current map view
+        function loadNlcdOverlay() {
+            var b = map.getBounds();
+            var size = map.getSize();
+            var url = "/nlcd_tile?west=" + b.getWest() + "&south=" + b.getSouth() +
+                      "&east=" + b.getEast() + "&north=" + b.getNorth() +
+                      "&width=" + size.x + "&height=" + size.y;
+            // remove old overlay before adding new one
+            if (nlcdOverlay) map.removeLayer(nlcdOverlay);
+            nlcdOverlay = L.imageOverlay(url, b, { opacity: 0.7, interactive: false });
+            nlcdOverlay.addTo(map);
+        }
+
+        var nlcdEnabled = false; // tracks checkbox state
+
+        // reload NLCD when map moves (only if enabled)
+        map.on("moveend", function() {
+            if (nlcdEnabled) loadNlcdOverlay();
         });
 
         // mark the user's location
         L.marker([userLat, userLon]).addTo(map)
             .bindPopup("Your location").openPopup();
 
-        // --- legend control (top-right) ---
-        var legend = L.control({ position: "topright" });
-        legend.onAdd = function() {
-            var div = L.DomUtil.create("div", "map-legend");
+        // --- layer filter panel (top-left) ---
+        var filterPanel = L.control({ position: "topleft" });
+        filterPanel.onAdd = function() {
+            var div = L.DomUtil.create("div", "layer-panel");
+            div.innerHTML =
+                '<h4>Layers</h4>' +
+                '<label><input type="checkbox" id="toggle-watersheds"> Watershed Boundaries</label>' +
+                '<label><input type="checkbox" id="toggle-nlcd"> Impervious Surface (NLCD)</label>';
+            L.DomEvent.disableClickPropagation(div); // prevent map clicks through panel
+            return div;
+        };
+        filterPanel.addTo(map);
+
+        // watershed toggle handler
+        document.getElementById("toggle-watersheds").addEventListener("change", function() {
+            if (this.checked) {
+                map.addLayer(watershedGroup);
+            } else {
+                map.removeLayer(watershedGroup);
+            }
+            rebuildLegend();
+        });
+
+        // NLCD toggle handler
+        document.getElementById("toggle-nlcd").addEventListener("change", function() {
+            nlcdEnabled = this.checked;
+            if (nlcdEnabled) {
+                loadNlcdOverlay();
+            } else if (nlcdOverlay) {
+                map.removeLayer(nlcdOverlay);
+                nlcdOverlay = null;
+            }
+            rebuildLegend();
+        });
+
+        // --- dynamic legend (top-right) — rebuilds when layers toggle ---
+        var legendControl = L.control({ position: "topright" });
+        var legendDiv;
+        legendControl.onAdd = function() {
+            legendDiv = L.DomUtil.create("div", "map-legend");
+            rebuildLegend();
+            return legendDiv;
+        };
+        legendControl.addTo(map);
+
+        function rebuildLegend() {
+            if (!legendDiv) return;
             var html =
                 '<h4>Legend</h4>' +
                 '<i style="background:#7b2cbf"></i> Stormwater Discharge Point<br>' +
                 '<span class="line" style="background:#e63946"></span> High Risk Stream<br>' +
                 '<span class="line" style="background:#fb8500"></span> Moderate Risk Stream<br>' +
                 '<span class="line" style="background:#2a9d8f"></span> Low Risk Stream';
-            // add watershed entries
-            watershedFeatures.forEach(function(f, i) {
-                var c = wsPalette[i % wsPalette.length];
-                var n = f.properties.Name || "Watershed " + (i+1);
-                html += '<br><i style="background:' + c + ';opacity:0.5"></i> ' + n;
-            });
-            div.innerHTML = html;
-            return div;
-        };
-        legend.addTo(map);
+
+            // show watershed entries only when layer is on
+            if (document.getElementById("toggle-watersheds").checked) {
+                html += '<br><strong style="font-size:11px;margin-top:4px;display:inline-block;">Watersheds</strong>';
+                watershedFeatures.forEach(function(f, i) {
+                    var c = wsPalette[i % wsPalette.length];
+                    var n = f.properties.Name || "Watershed " + (i+1);
+                    html += '<br><i style="background:' + c + ';opacity:0.5"></i> ' + n;
+                });
+            }
+
+            // show NLCD gradient only when layer is on
+            if (document.getElementById("toggle-nlcd").checked) {
+                html += '<br><strong style="font-size:11px;margin-top:4px;display:inline-block;">Impervious Surface</strong>';
+                html += '<br><span class="nlcd-gradient"></span> 0 – 100%';
+            }
+
+            legendDiv.innerHTML = html;
+        }
 
         // all salmon & trout species found in this dataset
         var salmonSpecies = "Chinook Salmon, Coho Salmon, Chum Salmon, Pink Salmon, Sockeye Salmon";
