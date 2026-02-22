@@ -102,27 +102,26 @@ def run_analysis(lat, lon):
     nearest_distance = nearby_streams.geometry.distance(user_point_m).min() if not nearby_streams.empty else 1000
 
     # impact score: closer streams + more stormwater drains = higher score (0-100)
-    impact_score = max(0, min(100, int((1 / (nearest_distance/100 + 1)) * 50 + len(nearby_stormwater) * 10)))
+    # Scale distance for a more reasonable impact score
+    distance_component = max(0, 50 * (1 - nearest_distance / 1000))  # 0-50
+    stormwater_component = min(len(nearby_stormwater) * 10, 50)     # 0-50 max
+    impact_score = int(distance_component + stormwater_component)
 
     # color each stream by its own distance-based risk
     nearby_streams = nearby_streams.copy()
-    drain_count = len(nearby_stormwater)
-    nearby_streams['riskColor'] = [
-        get_risk_color(geom.distance(user_point_m), drain_count)
-        for geom in nearby_streams.geometry
-    ]
+    nearby_streams['riskColor'] = nearby_streams.geometry.apply(
+        lambda geom: score_to_color(int(50 * (1 - geom.distance(user_point_m)/1000) + min(len(nearby_stormwater)*10,50)))
+    )
 
     # convert streams back to lat/lon for Leaflet (Leaflet uses EPSG:4326)
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
 
     return {
         "nearby_streams": nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else [],
-        # convert stormwater to geojson features so coordinates serialize properly
-        "nearby_stormwater": json.loads(nearby_stormwater.to_crs(epsg=4326).to_json())["features"] if not nearby_stormwater.empty else [],
+        "nearby_stormwater": nearby_stormwater.to_crs(epsg=4326).to_dict(orient="records") if not nearby_stormwater.empty else [],
         "impact_score": impact_score,
         "risk_color": score_to_color(impact_score)
     }
-
 
 # API endpoint — returns JSON (kept for any future use)
 @app.route("/analyze", methods=["POST"])
