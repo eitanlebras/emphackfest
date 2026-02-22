@@ -213,7 +213,6 @@ ul p {
 .step-card {
   padding: 10px;
   border: 1px var(--black-color) solid;
-  border-radius: 10px;
   width: 100%;
   margin-bottom: 20px;
   cursor: pointer;
@@ -273,14 +272,12 @@ section#impact .right-part {
   height: 500px;
   max-width: 1100px;
   margin: 0 auto 40px;
-  border-radius: 10px;
   border: 1px solid #ddd;
 }
 
 /* risk badge colors */
 .risk-badge {
   padding: 4px 12px;
-  border-radius: 6px;
   font-weight: 700;
   color: #fff;
 }
@@ -296,7 +293,6 @@ section#impact .right-part {
   padding: 12px 20px;
   background: #fff3cd;
   border: 1px solid #ffc107;
-  border-radius: 8px;
   text-align: center;
   font-weight: 500;
   color: #664d03;
@@ -304,8 +300,6 @@ section#impact .right-part {
 
 /* style leaflet popups as cards */
 .leaflet-popup-content-wrapper {
-  border-radius: 10px;
-  box-shadow: 0 3px 12px rgba(0,0,0,0.15);
   padding: 4px;
 }
 .leaflet-popup-content { margin: 10px 12px; }
