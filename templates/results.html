@@ -342,10 +342,14 @@
             var color = riskColors[risk] || "#2a9d8f";
             var name = feature.properties.LLID_STRM_NAME || "Salmon stream";
 
-            // find the midpoint of the stream to calculate distance
+            // find closest point on stream to user
             var coords = feature.geometry.coordinates;
-            var mid = coords[Math.floor(coords.length / 2)];
-            var dist = Math.round(distanceMeters(userLat, userLon, mid[1], mid[0]));
+            var dist = Infinity;
+            for (var ci = 0; ci < coords.length; ci++) {
+                var d = distanceMeters(userLat, userLon, coords[ci][1], coords[ci][0]);
+                if (d < dist) dist = d;
+            }
+            dist = Math.round(dist);
 
             // styled popup card
             var popup =

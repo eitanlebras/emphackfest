@@ -158,8 +158,18 @@ def run_analysis(lat, lon):
     nearby_streams_4326 = nearby_streams.to_crs(epsg=4326) if not nearby_streams.empty else nearby_streams
     raw_features = nearby_streams_4326.__geo_interface__['features'] if not nearby_streams_4326.empty else []
 
+    # spatially join nearby streams to watersheds for watershed_name
+    if not nearby_streams_4326.empty and not watersheds.empty:
+        pts = nearby_streams_4326.copy()
+        pts["_rep"] = pts.geometry.representative_point()
+        pts = pts.set_geometry("_rep")
+        joined = gpd.sjoin(pts, watersheds[["Name", "geometry"]], how="left", predicate="within")
+        # map LLID -> watershed name (first match)
+        ws_lookup = dict(zip(joined["LLID"], joined["Name"]))
+    else:
+        ws_lookup = {}
+
     # group features by stream ID (LLID) so each stream is drawn once
-    # combine all species and keep the longest geometry to show full extent
     seen = {}
     merged_features = []
     for f in raw_features:
@@ -168,16 +178,15 @@ def run_analysis(lat, lon):
         coord_count = len(f["geometry"]["coordinates"])
 
         if llid in seen:
-            # add species to existing entry
             if sp and sp not in seen[llid]["properties"]["allSpecies"]:
                 seen[llid]["properties"]["allSpecies"].append(sp)
-            # keep the longest geometry so the full stream is visible
             if coord_count > len(seen[llid]["geometry"]["coordinates"]):
                 seen[llid]["geometry"] = f["geometry"]
         else:
-            # first time seeing this stream — start a new merged feature
             props = dict(f["properties"])
             props["allSpecies"] = [sp] if sp else []
+            # attach watershed name from spatial join
+            props["watershed_name"] = ws_lookup.get(llid, None)
             f["properties"] = props
             seen[llid] = f
             merged_features.append(f)
