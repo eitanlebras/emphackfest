@@ -64,11 +64,8 @@
         </div>
     </section>
 
-    <section id="impact">
+    <section id="impact" class="how-it-works-section">
         <div class="left-part">
-            <img src="#" alt="">
-        </div>
-        <div class="right-part">
             <h1 class="main">How it works</h1>
             <ul class="how-it-works">
                 <li><span>1. <i class="fa-solid fa-house"></i></span>&nbsp;Enter your address</li>
@@ -79,7 +76,14 @@
                 <p class="measure-impact-step">We calculate how much your neighborhood contributes to salmon habitat pollution.</p>
             </ul>
         </div>
+        <div class="right-part">
+            <video class="demo-video" controls>
+                <source src="{{ url_for('static', filename='media/demo.mov') }}" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+        </div>
     </section>
+    <!-- from google btw -->
     <!-- 
       The `defer` attribute causes the script to execute after the full HTML
       document has been parsed. For non-blocking uses, avoiding race conditions,
@@ -87,7 +91,7 @@
       https://developers.google.com/maps/documentation/javascript/load-maps-js-api
       for more information.
       -->
-    
+
     <!-- Meet the team -->
     <section id="team">
         <div class="team-left">
@@ -100,7 +104,7 @@
             </p>
         </div>
         <div class="team-right">
-            <div class="team-photo-placeholder">Team photo</div>
+            <img src="{{ url_for('static', filename='media/team.jpg') }}" alt="The team" class="team-photo">
         </div>
     </section>
 

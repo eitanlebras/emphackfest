@@ -4,7 +4,7 @@
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>{% block title %}SalmonShield{% endblock %}</title>
-        <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logo.png') }}">
+        <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/logo.png') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
         <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
         <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -15,7 +15,7 @@
     </head>
     <body>
         <header>
-            <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" class="logo-img">
+            <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="logo-img">
             <h1>SalmonShield</h1>
         </header>
 
