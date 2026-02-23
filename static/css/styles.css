@@ -224,6 +224,16 @@ section#impact .right-part {
   padding-left: 4px;
 }
 
+/* demo video */
+.demo-video {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--border);
+}
+section#impact.how-it-works-section .right-part {
+  flex: 0 0 480px;
+}
+
 /* meeet the team */
 #team {
   max-width: var(--content-max);
@@ -257,6 +267,11 @@ section#impact .right-part {
   color: #444;
   line-height: 1.8;
   max-width: 460px;
+}
+.team-photo {
+  width: 100%;
+  display: block;
+  border: 1px solid var(--border);
 }
 .team-photo-placeholder {
   width: 100%;
