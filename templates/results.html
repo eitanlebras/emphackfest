@@ -27,58 +27,6 @@
     <!-- leaflet map fills this div -->
     <div id="results-map"></div>
 
-    <!-- styles for map popups, legend, layer panel, and suggestions -->
-    <style>
-        /* popup card that appears when clicking a stream/point */
-        .popup-card { font-family: 'Lato', sans-serif; min-width: 200px; }
-        .popup-card h3 { margin: 0 0 6px; font-size: 14px; }
-        .popup-card p { margin: 2px 0; font-size: 12px; color: #444; }
-        .popup-card .risk-badge { padding: 2px 8px; font-size: 11px; font-weight: 700; color: #fff; }
-        .popup-card .risk-red { background: #e63946; }     /* high risk */
-        .popup-card .risk-yellow { background: #fb8500; color: #1b1b1b; } /* moderate */
-        .popup-card .risk-green { background: #2a9d8f; }   /* low risk */
-        .popup-card .divider { border-top: 1px solid #eee; margin: 6px 0; }
-
-        /* legend box (top-right of map) */
-        .map-legend { background: #fff; padding: 10px 14px; font-family: 'Lato', sans-serif; font-size: 12px; line-height: 1.8; }
-        .map-legend h4 { margin: 0 0 6px; font-size: 13px; }
-        .map-legend i { display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: middle; }
-        .map-legend .line { width: 18px; height: 4px; display: inline-block; margin-right: 6px; vertical-align: middle; }
-
-        /* layer toggle panel (top-left of map) */
-        .layer-panel { background: #fff; padding: 10px 14px; font-family: 'Lato', sans-serif; font-size: 12px; line-height: 2; }
-        .layer-panel h4 { margin: 0 0 4px; font-size: 13px; }
-        .layer-panel label { display: block; cursor: pointer; }
-        .layer-panel input[type="checkbox"] { margin-right: 6px; vertical-align: middle; }
-
-        /* back button */
-        .back-btn { display: inline-flex; align-items: center; gap: 8px; color: #555; text-decoration: none; font-size: 13px; font-weight: 600; padding: 8px 16px; background: #f0f0f0; transition: background 0.15s, color 0.15s; margin-bottom: 16px; }
-        .back-btn:hover { background: #e0e0e0; color: #1b1b1b; }
-
-        /* FAQ accordion */
-        #faq-section { max-width: 860px; margin: 32px auto 0; padding: 0 16px 48px; }
-        #faq-section > h3 { font-size: 16px; margin-bottom: 16px; color: #1b1b1b; }
-        .faq-item { border: 1px solid #e8e8e8; margin-bottom: 8px; background: #fff; overflow: hidden; }
-        .faq-item summary { padding: 14px 18px; font-size: 14px; font-weight: 600; color: #1b1b1b; cursor: pointer; display: flex; justify-content: space-between; align-items: center; list-style: none; user-select: none; }
-        .faq-item summary::-webkit-details-marker { display: none; }
-        .faq-item summary::after { content: '\f107'; font-family: 'Font Awesome 6 Free'; font-weight: 900; color: #aaa; font-size: 13px; transition: transform 0.2s; }
-        .faq-item[open] > summary::after { transform: rotate(180deg); }
-        .faq-item[open] > summary { border-bottom: 1px solid #f0f0f0; color: #2a9d8f; }
-        .faq-item p { margin: 0; padding: 14px 18px; font-size: 13px; color: #555; line-height: 1.7; }
-
-        /* GPT suggestions section below the map */
-        .suggestions-card { max-width: 860px; margin: 24px auto 0; padding: 0 16px; }
-        .suggestions-card h3 { margin: 0 0 12px; font-size: 16px; color: #1b1b1b; }
-        .suggestions-card .suggestion { margin-bottom: 16px; }
-        .suggestions-card .suggestion:last-child { margin-bottom: 0; }
-        .suggestions-card h4 { margin: 0 0 6px; font-size: 14px; }
-        .suggestions-card p { margin: 0; font-size: 13px; color: #444; line-height: 1.7; white-space: pre-line; }
-
-        /* color bar showing impervious surface gradient in legend */
-        .nlcd-gradient { width: 100px; height: 10px; display: inline-block; vertical-align: middle; margin-right: 6px;
-            background: linear-gradient(to right, rgba(0,200,30,0.4), rgba(200,100,30,0.7), rgba(255,0,30,0.9)); }
-    </style>
-
     <script>
         // --- data injected from Flask backend (Jinja2 fills these in) ---
         var streams = {{ streams_json | safe }};            // nearby salmon stream features
@@ -600,24 +548,6 @@
     <div id="stream-survey-section">
         <div id="stream-survey-panel"></div>
     </div>
-
-    <style>
-        #env-stats-section { max-width: 860px; margin: 24px auto 0; padding: 0 16px; }
-        #env-stats-section h3 { font-size: 16px; margin-bottom: 12px; color: #1b1b1b; }
-        #env-stats-row { display: flex; gap: 12px; flex-wrap: wrap; }
-        .env-card { flex: 1; min-width: 180px; background: #fff; border: 2px solid #e8e8e8; padding: 14px 16px; transition: border-color 0.2s; }
-        .env-card-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin-bottom: 6px; }
-        .env-card-value { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
-        .env-card-sub { font-size: 12px; color: #888; }
-        #stream-survey-section { max-width: 860px; margin: 24px auto 0; padding: 0 16px; }
-        #stream-survey-section h3 { font-size: 16px; margin-bottom: 12px; color: #1b1b1b; }
-        .stream-card { background: #fff; border: 1px solid #e8e8e8; padding: 12px 16px; margin-bottom: 10px; }
-        .stream-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-        .stream-name { font-weight: 700; font-size: 14px; color: #1b1b1b; }
-        .risk-dot { width: 10px; height: 10px; flex-shrink: 0; }
-        .stream-card-body { display: flex; flex-wrap: wrap; gap: 10px 20px; }
-        .stream-stat { font-size: 13px; color: #444; }
-    </style>
 
     <!-- AI-generated suggestions for this location -->
     {% if suggestions %}
