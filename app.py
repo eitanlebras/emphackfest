@@ -157,7 +157,7 @@ def _haversine(lat1, lon1, lat2, lon2):
     a = (math.sin(dlat / 2) ** 2 + 
          math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
          math.sin(dlon / 2) ** 2)
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)) 
 
 # fetch road density (km/km²) from Overpass API within 500m
 def fetch_road_density(lat, lon, radius=500):
@@ -242,7 +242,7 @@ def calculate_score(distance_m, discharge_count, road_density, ehd_rank,
 
 # --- main analysis function ---
 def run_analysis(lat, lon):
-    user_point = Point(lon, lat)  # turns address shapely point (lon first, lat second)
+    user_point = Point(lon, lat)  # turns address shapely point (lon first, lat second) because that's the standard for geospatial libraries; we will reproject this point to meters for distance calculations, but keep it in lat/lon for spatial joins and final output to the frontend since Leaflet expects GeoJSON in EPSG:4326
 
     # reproject to meters (EPSG:3857) for distance calculations
     user_point_m = gpd.GeoSeries([user_point], crs="EPSG:4326").to_crs(epsg=3857).iloc[0]
@@ -517,7 +517,7 @@ def analyze():
         water_quality=data.get("water_quality"),
         precip_forecast=f"{precip['total_inches']} inches over 3 days" if precip else "unavailable",
     )
-    return jsonify(data)
+    return jsonify(data) 
 
 
 # --- results page (the main user-facing page) ---
