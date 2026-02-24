@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Results — SalmonShield{% endblock %}
+{% block title %}Results{% endblock %}
 
 {% block content %}
 
@@ -9,13 +9,33 @@
     <!-- score panel -->
     <div class="results-panel">
         {% if nearest_stream_dist_km %}
-            <h2>Danger Score: N/A</h2>
-            <p>Move closer to a salmon stream to see your impact score.</p>
+            <div class="score-label">Danger Score</div>
+            <div class="score-na">N/A</div>
+            <p class="score-na-sub">Move closer to a salmon stream to see your impact score.</p>
         {% else %}
-            <h2>Danger Score: {{ impact_score }}/100</h2>
-            <p>Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
+            <div class="score-label">Danger Score</div>
+            <div class="score-number"><span id="score-counter" data-target="{{ impact_score }}">0</span><span>/100</span></div>
+            <p style="margin-top:12px;">Risk Level: <span class="risk-badge risk-{{ risk_color }}">{{ risk_color | upper }}</span></p>
         {% endif %}
     </div>
+
+    {% if not nearest_stream_dist_km %}
+    <script>
+        (function() {
+            var el = document.getElementById("score-counter");
+            if (!el) return;
+            var target = parseInt(el.getAttribute("data-target"), 10) || 0;
+            var current = 0;
+            var duration = 1200;
+            var stepTime = Math.max(Math.floor(duration / target), 16);
+            var timer = setInterval(function() {
+                current++;
+                el.textContent = current;
+                if (current >= target) clearInterval(timer);
+            }, stepTime);
+        })();
+    </script>
+    {% endif %}
 
     <!-- alert when no rivers are nearby -->
     {% if nearest_stream_dist_km %}
@@ -417,42 +437,49 @@
     <!-- environmental stats row -->
     <div id="env-stats-section">
         <h3>Environmental Conditions</h3>
+        <p class="env-data-note">Conditions measured within 1km of your address using real-time and annually-updated data sources.</p>
         <div id="env-stats-row">
             <!-- water quality card -->
             <div class="env-card" id="wq-card">
                 <div class="env-card-label">Water Quality Impairments</div>
                 <div class="env-card-value" id="wq-value">—</div>
                 <div class="env-card-sub" id="wq-sub"></div>
+                <div class="env-card-unit">303(d) listed</div>
             </div>
             <!-- storm drains card -->
-            <div class="env-card">
+            <div class="env-card" id="drain-card">
                 <div class="env-card-label">Storm Drains within 1 km</div>
                 <div class="env-card-value" id="drain-value">—</div>
                 <div class="env-card-sub">Stormwater discharge points</div>
+                <div class="env-card-unit">NPDES outfalls</div>
             </div>
             <!-- traffic card -->
             <div class="env-card" id="traffic-card">
                 <div class="env-card-label">Heavy Traffic Exposure</div>
                 <div class="env-card-value" id="traffic-value">—</div>
                 <div class="env-card-sub" id="traffic-sub"></div>
+                <div class="env-card-unit">EHD percentile</div>
             </div>
             <!-- road density card -->
             <div class="env-card" id="road-card">
                 <div class="env-card-label">Road Density (500m)</div>
                 <div class="env-card-value" id="road-value">—</div>
                 <div class="env-card-sub" id="road-sub">km of road per km²</div>
+                <div class="env-card-unit">km/km²</div>
             </div>
             <!-- impervious surface card -->
             <div class="env-card" id="imperv-card">
                 <div class="env-card-label">Impervious Surface</div>
                 <div class="env-card-value" id="imperv-value">—</div>
                 <div class="env-card-sub">At your location (NLCD 2024)</div>
+                <div class="env-card-unit">% coverage</div>
             </div>
             <!-- precipitation card -->
             <div class="env-card" id="precip-card">
                 <div class="env-card-label">Precipitation (3-day)</div>
                 <div class="env-card-value" id="precip-value">—</div>
                 <div class="env-card-sub" id="precip-sub">inches forecast</div>
+                <div class="env-card-unit">in (cumulative)</div>
             </div>
         </div>
     </div>
@@ -460,6 +487,11 @@
     <script>
         // fill in all the enviroment stat cards
         (function() {
+            // helper: set the top border color on a card
+            function setCardBorder(card, color) {
+                if (card) card.style.borderTopColor = color;
+            }
+
             // water quality stuff
             var wqVal = document.getElementById("wq-value");
             var wqSub = document.getElementById("wq-sub");
@@ -471,7 +503,7 @@
                 wqVal.textContent = imp + " impairment" + (imp !== 1 ? "s" : "");
                 wqVal.style.color = color;
                 wqSub.textContent = "Water quality rank: " + rank + "/10";
-                wqCard.style.borderColor = color;
+                setCardBorder(wqCard, color);
             } else {
                 wqVal.textContent = "No data";
                 wqVal.style.color = "#bbb";
@@ -480,9 +512,11 @@
 
             // storm drains
             var drainVal = document.getElementById("drain-value");
+            var drainCard = document.getElementById("drain-card");
             var drainColor = drainCount === 0 ? "#2a9d8f" : drainCount <= 3 ? "#fb8500" : "#e63946";
             drainVal.textContent = drainCount;
             drainVal.style.color = drainColor;
+            setCardBorder(drainCard, drainColor);
 
             // traffic stuff
             var tVal = document.getElementById("traffic-value");
@@ -495,14 +529,14 @@
                 tVal.textContent = tLabel;
                 tVal.style.color = tColor;
                 tSub.textContent = "EHD rank: " + tRank + "/10";
-                tCard.style.borderColor = tColor;
+                setCardBorder(tCard, tColor);
             } else {
                 tVal.textContent = "No data";
                 tVal.style.color = "#bbb";
                 tSub.textContent = "Outside coverage area";
             }
 
-            // road densitiy
+            // road density
             var rdVal = document.getElementById("road-value");
             var rdSub = document.getElementById("road-sub");
             var rdCard = document.getElementById("road-card");
@@ -511,22 +545,22 @@
                 rdVal.textContent = serverRoadDensity.toFixed(1) + " km/km\u00B2";
                 rdVal.style.color = rdColor;
                 rdSub.textContent = serverRoadDensity < 5 ? "Low density" : serverRoadDensity < 15 ? "Moderate density" : "High density";
-                rdCard.style.borderColor = rdColor;
+                setCardBorder(rdCard, rdColor);
             } else {
                 rdVal.textContent = "No data";
                 rdVal.style.color = "#bbb";
                 rdSub.textContent = "Overpass API unavailable";
             }
 
-            // impervous surface
+            // impervious surface
             var impVal = document.getElementById("imperv-value");
             var impCard = document.getElementById("imperv-card");
             var impClr = imperviousPct < 20 ? "#2a9d8f" : imperviousPct < 50 ? "#fb8500" : "#e63946";
             impVal.textContent = imperviousPct + "%";
             impVal.style.color = impClr;
-            impCard.style.borderColor = impClr;
+            setCardBorder(impCard, impClr);
 
-            // rain forcast
+            // rain forecast
             var precipVal = document.getElementById("precip-value");
             var precipSub = document.getElementById("precip-sub");
             var precipCard = document.getElementById("precip-card");
@@ -535,7 +569,7 @@
                 var precipClr = total < 0.5 ? "#2a9d8f" : total < 1.5 ? "#fb8500" : "#e63946";
                 precipVal.textContent = total.toFixed(2) + " in";
                 precipVal.style.color = precipClr;
-                precipCard.style.borderColor = precipClr;
+                setCardBorder(precipCard, precipClr);
                 var probs = serverPrecipData.precip_prob;
                 precipSub.textContent = "Today: " + (probs[0] != null ? probs[0] + "%" : "—") + " chance of rain";
             } else {
@@ -551,23 +585,78 @@
     </div>
 
     <!-- AI-generated suggestions for this location -->
-    {% if suggestions %}
-    <div class="suggestions-card">
+    <section id="suggestions-section">
         <h3>What You Can Do Here</h3>
-        {% if suggestions.community %}
-        <div class="suggestion">
-            <h4>For Community Members</h4>
-            <p>{{ suggestions.community }}</p>
+        <div class="suggestions-row">
+            <article class="suggestion-card suggestion-community" id="suggestion-community">
+                <div class="suggestion-card-header">
+                    <i class="fa-solid fa-user"></i>
+                    <span class="suggestion-card-label">For Residents</span>
+                </div>
+                <div class="suggestion-card-body" id="suggestion-community-body">
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line skeleton-short"></div>
+                    <div class="skeleton-line"></div>
+                </div>
+            </article>
+            <article class="suggestion-card suggestion-scientist" id="suggestion-scientist">
+                <div class="suggestion-card-header">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="suggestion-card-label">For Scientists &amp; Rangers</span>
+                </div>
+                <div class="suggestion-card-body" id="suggestion-scientist-body">
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line skeleton-short"></div>
+                    <div class="skeleton-line"></div>
+                </div>
+            </article>
         </div>
-        {% endif %}
-        {% if suggestions.scientist %}
-        <div class="suggestion">
-            <h4>For Conservation Scientists</h4>
-            <p>{{ suggestions.scientist }}</p>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
+    </section>
+
+    <script>
+        // fetch AI suggestions asynchronously so the page loads instantly
+        (function() {
+            var payload = {
+                danger_score: {{ impact_score }},
+                water_quality_impairments: waterQuality
+                    ? waterQuality.total_impairments + " impairments (rank " + waterQuality.max_rank + "/10)"
+                    : "No data",
+                storm_drain_count: drainCount,
+                road_density: serverRoadDensity != null
+                    ? serverRoadDensity.toFixed(1) + " km/km\u00B2"
+                    : "unavailable",
+                ehd_rank: trafficData ? trafficData.ehd_rank : "No data",
+                impervious_surface_pct: imperviousPct,
+                precipitation_forecast: serverPrecipData
+                    ? serverPrecipData.precip_inches.reduce(function(s,v){return s+(v||0);},0).toFixed(2) + " inches over 3 days"
+                    : "unavailable"
+            };
+
+            var fallbackMsg = '<p class="suggestion-fallback">' +
+                'Suggestions are temporarily unavailable. Try searching again in a moment.</p>';
+
+            fetch("/suggestions", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var communityBody = document.getElementById("suggestion-community-body");
+                var scientistBody = document.getElementById("suggestion-scientist-body");
+                communityBody.innerHTML = data.community
+                    ? "<p>" + data.community + "</p>"
+                    : fallbackMsg;
+                scientistBody.innerHTML = data.scientist
+                    ? "<p>" + data.scientist + "</p>"
+                    : fallbackMsg;
+            })
+            .catch(function() {
+                document.getElementById("suggestion-community-body").innerHTML = fallbackMsg;
+                document.getElementById("suggestion-scientist-body").innerHTML = fallbackMsg;
+            });
+        })();
+    </script>
 
     <!-- FAQ section -->
     <div id="faq-section">
@@ -575,38 +664,56 @@
 
         <details class="faq-item">
             <summary>How do we calculate the danger score?</summary>
-            <p>Our danger score is calculated based on a weighted sum of several factors including proximity to heavy traffic roadways, impervious surface area, storm drain density, watershed characteristics, and water quality metrics.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>Our danger score is calculated based on a weighted sum of several factors including proximity to heavy traffic roadways, impervious surface area, storm drain density, watershed characteristics, and water quality metrics.</p>
+            </div></div>
         </details>
 
         <details class="faq-item">
             <summary>What is an impervious surface?</summary>
-            <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>Impervious surfaces are man-made structures like roads, parking lots, and rooftops that prevent rainwater from soaking into the ground. Instead, water runs off these surfaces, picking up pollutants and increasing the volume and speed of runoff entering nearby streams. This can lead to erosion, habitat degradation, and increased pollution in salmon habitats.</p>
+            </div></div>
         </details>
 
         <details class="faq-item">
             <summary>What are storm discharge drains?</summary>
-            <p>Storm discharge drains are part of the urban drainage system that collects and channels surface water runoff from streets, parking lots, and other impervious surfaces to nearby streams or rivers. When these drains are not properly managed, they can carry pollutants directly into salmon habitats.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>Storm discharge drains are part of the urban drainage system that collects and channels surface water runoff from streets, parking lots, and other impervious surfaces to nearby streams or rivers. When these drains are not properly managed, they can carry pollutants directly into salmon habitats.</p>
+            </div></div>
         </details>
 
         <details class="faq-item">
             <summary>What is a watershed?</summary>
-            <p>A watershed is an area of land that drains to a common water body, such as a stream or river. Watersheds are important in salmon habitat because they define the boundaries of the drainage area that contributes water and pollutants to a stream.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>A watershed is an area of land that drains to a common water body, such as a stream or river. Watersheds are important in salmon habitat because they define the boundaries of the drainage area that contributes water and pollutants to a stream.</p>
+            </div></div>
         </details>
 
         <details class="faq-item">
             <summary>How do heavy traffic roadways affect salmon habitats?</summary>
-            <p>Heavy traffic roadways contribute to salmon habitat degradation through increased impervious surfaces, which lead to higher volumes of runoff and pollutants entering nearby streams. The runoff carries oil, heavy metals, and other contaminants that can be toxic to salmon and their spawning grounds.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>Heavy traffic roadways contribute to salmon habitat degradation through increased impervious surfaces, which lead to higher volumes of runoff and pollutants entering nearby streams. The runoff carries oil, heavy metals, and other contaminants that can be toxic to salmon and their spawning grounds.</p>
+            </div></div>
         </details>
 
         <details class="faq-item">
             <summary>How does rainfall affect salmon habitats?</summary>
-            <p>Heavy rainfall can increase the volume and speed of runoff entering streams, carrying pollutants and sediments that can degrade salmon habitats. Excessive runoff can cause erosion, alter stream flow patterns, and introduce harmful substances that are toxic to salmon and their spawning grounds.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>Heavy rainfall can increase the volume and speed of runoff entering streams, carrying pollutants and sediments that can degrade salmon habitats. Excessive runoff can cause erosion, alter stream flow patterns, and introduce harmful substances that are toxic to salmon and their spawning grounds.</p>
+            </div></div>
         </details>
 
         <details class="faq-item">
             <summary>How does water quality affect salmon habitats?</summary>
-            <p>Water quality is crucial for salmon survival. Pollutants such as heavy metals, pesticides, and excess nutrients can accumulate in streams and rivers, leading to habitat degradation. Poor water quality can reduce oxygen levels, increase toxicity, and disrupt the food chain that salmon depend on.</p>
+            <div class="faq-answer"><div class="faq-answer-inner">
+                <p>Water quality is crucial for salmon survival. Pollutants such as heavy metals, pesticides, and excess nutrients can accumulate in streams and rivers, leading to habitat degradation. Poor water quality can reduce oxygen levels, increase toxicity, and disrupt the food chain that salmon depend on.</p>
+            </div></div>
         </details>
+    </div>
+
+    <div class="data-attribution">
+        Environmental data provided by WDFW, WSDOT, NOAA, EPA EJScreen, and NLCD 2024.
     </div>
 
 {% endblock %}

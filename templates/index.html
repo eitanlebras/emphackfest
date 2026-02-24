@@ -6,20 +6,44 @@
     <div class="hero">
         <h1 class="main-text">
             See how your street <br>
-            <span>affects salmon</span>
+            <span class="accent-underline">affects salmon</span>
         </h1>
         <p>
             Enter your location to see how your neighborhood is impacting nearby salmon streams
         </p>
-    
+
         <div class="enter-location">
             <label for="pac-container" id="address-label">Type your address (<button type="button" id="use-location"><i class="fa-solid fa-map-pin"></i>Use my location</button>)</label>
             <div id="pac-container"></div>
             <p class="disclaimer">We don't store your data. </p>
             <p class="location-readout" id="location-readout"></p>
         </div>
+
+        <div class="stat-pills">
+            <span class="stat-pill">90% of urban coho die before spawning</span>
+            <span class="stat-dot">&middot;</span>
+            <span class="stat-pill">500+ discharge points in King County</span>
+            <span class="stat-dot">&middot;</span>
+            <span class="stat-pill">12 at-risk salmon species</span>
+        </div>
     </div>
     <div id="map"></div>
+
+    <!-- Why It Matters — three large stat callouts -->
+    <section class="why-it-matters">
+        <div class="stat-callout">
+            <span class="stat-number">90%</span>
+            <span class="stat-caption">of urban coho die before spawning</span>
+        </div>
+        <div class="stat-callout">
+            <span class="stat-number">500+</span>
+            <span class="stat-caption">stormwater discharge points in King County</span>
+        </div>
+        <div class="stat-callout">
+            <span class="stat-number">$2.3B</span>
+            <span class="stat-caption">economic value of Washington salmon fisheries</span>
+        </div>
+    </section>
 
     <section id="impact">
         <div class="left-part">
@@ -64,34 +88,32 @@
         </div>
     </section>
 
-    <section id="impact" class="how-it-works-section">
-        <div class="left-part">
-            <h1 class="main">How it works</h1>
-            <ul class="how-it-works">
-                <li><span>1. <i class="fa-solid fa-house"></i></span>&nbsp;Enter your address</li>
-                <p class="address-step">Just simply enter your address in the search box above.</p>
-                <li><span>2. <i class="fa-solid fa-sailboat"></i></span>&nbsp;Trace the Flow</li>
-                <p class="trace-flow-step">We trace the path of water from your location to nearby salmon streams.</p>
-                <li><span>3. <i class="fa-solid fa-gauge"></i></span>&nbsp;Measure Impact</li>
-                <p class="measure-impact-step">We calculate how much your neighborhood contributes to salmon habitat pollution.</p>
-            </ul>
-        </div>
-        <div class="right-part">
-            <video class="demo-video" controls>
-                <source src="{{ url_for('static', filename='media/demo.mov') }}" type="video/mp4">
-                Your browser does not support the video tag.
-            </video>
+    <section id="how-it-works">
+        <h1 class="main">How it works</h1>
+        <div class="how-it-works-steps">
+            <div class="how-step">
+                <span class="how-step-number">1</span>
+                <div>
+                    <h3><i class="fa-solid fa-house"></i> Enter your address</h3>
+                    <p>Type your address in the search box above.</p>
+                </div>
+            </div>
+            <div class="how-step">
+                <span class="how-step-number">2</span>
+                <div>
+                    <h3><i class="fa-solid fa-sailboat"></i> Trace the Flow</h3>
+                    <p>We trace the path of water from your location to nearby salmon streams.</p>
+                </div>
+            </div>
+            <div class="how-step">
+                <span class="how-step-number">3</span>
+                <div>
+                    <h3><i class="fa-solid fa-gauge"></i> Measure Impact</h3>
+                    <p>We calculate how much your neighborhood contributes to salmon habitat pollution.</p>
+                </div>
+            </div>
         </div>
     </section>
-    <!-- from google btw -->
-    <!-- 
-      The `defer` attribute causes the script to execute after the full HTML
-      document has been parsed. For non-blocking uses, avoiding race conditions,
-      and consistent behavior across browsers, consider loading using Promises. See
-      https://developers.google.com/maps/documentation/javascript/load-maps-js-api
-      for more information.
-      -->
-
     <!-- Meet the team -->
     <section id="team">
         <div class="team-left">

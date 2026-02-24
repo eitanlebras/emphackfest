@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{% block title %}SalmonShield{% endblock %}</title>
+        <title>SalmonShield · {% block title %}Home{% endblock %}</title>
         <link rel="icon" type="image/png" href="{{ url_for('static', filename='media/logo.png') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
         <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
@@ -14,14 +14,25 @@
         <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
     </head>
     <body>
+        <div class="announcement-bar" id="announcement-bar">
+            <span>&#x1F41F; SalmonShield — Built for Washington State salmon conservation</span>
+            <button class="announcement-close" aria-label="Dismiss" onclick="document.getElementById('announcement-bar').remove()">&times;</button>
+        </div>
+
         <header>
-            <img src="{{ url_for('static', filename='media/logo.png') }}" alt="Logo" class="logo-img">
-            <h1>SalmonShield</h1>
+            <div class="logo-lockup">
+                <img src="{{ url_for('static', filename='media/logo.png') }}" alt="SalmonShield logo" class="logo-img">
+                <h1>SalmonShield</h1>
+            </div>
         </header>
 
         <main>
             {% block content %}{% endblock %}
         </main>
+
+        <div class="data-source-strip">
+            Data sourced from WDFW &middot; WSDOT &middot; NOAA &middot; NLCD 2024
+        </div>
 
         <footer>
             <p>&copy; 2026 SalmonShield. All rights reserved.</p>

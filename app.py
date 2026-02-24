@@ -468,35 +468,40 @@ def _get_openai():
     return _openai_client
 
 # build a prompt with real data and ask GPT for actionable suggestions
-def get_suggestions(impact_score, discharge_count, road_density, water_quality, precip_forecast):
-    prompt = ( # gpt prompt to generate specific suggestions for the user
-        f"You are a salmon habitat conservation advisor. Given this data:\n"
-        f"- Danger score: {impact_score}/100\n"
-        f"- Stormwater discharge points nearby: {discharge_count}\n"
-        f"- Road density: {road_density}\n"
-        f"- Water quality: {water_quality}\n"
-        f"- Precipitation forecast: {precip_forecast}\n\n"
-        "Give exactly two sets of bullet-point suggestions. Each suggestion MUST include "
-        "specific numbers, percentages, or measurable actions based on the data above. "
-        "For example: 'Reducing impervious surface by 15% in this area would cut runoff volume by ~20%.' "
-        "Do NOT write generic advice. Reference the actual numbers provided.\n\n"
-        "1. COMMUNITY: 2-3 bullet points a regular person can act on, with concrete numbers.\n"
-        "2. SCIENTIST: 2-3 bullet points for a conservation scientist, with technical specifics.\n\n"
-        "Return JSON with keys \"community\" and \"scientist\". Each value is a string "
-        "with bullet points separated by newlines, each starting with •"
+def get_suggestions(danger_score, water_quality_impairments, storm_drain_count,
+                    road_density, ehd_rank, impervious_surface_pct,
+                    precipitation_forecast):
+    prompt = (
+        "You are SalmonShield, a salmon habitat conservation advisor for Washington State. "
+        "Given this environmental data for a specific location, provide two actionable recommendations.\n\n"
+        f"- Danger score: {danger_score}/100\n"
+        f"- Water quality impairments nearby: {water_quality_impairments}\n"
+        f"- Stormwater discharge points within 1 km: {storm_drain_count}\n"
+        f"- Road density (500m radius): {road_density}\n"
+        f"- Heavy traffic EHD rank: {ehd_rank}/10\n"
+        f"- Impervious surface at location: {impervious_surface_pct}%\n"
+        f"- 3-day precipitation forecast: {precipitation_forecast}\n\n"
+        "Return JSON with exactly two keys:\n"
+        "\"community\": A plain-language paragraph (2-3 sentences) for residents. "
+        "Be practical and specific to the actual data values above. Reference the numbers. "
+        "Suggest concrete actions a homeowner or community member can take right now.\n"
+        "\"scientist\": A technical paragraph (2-3 sentences) for a conservation professional or ranger. "
+        "Reference 6PPD-quinone toxicity thresholds, specific impervious surface or runoff metrics, "
+        "and actionable monitoring or mitigation steps tied to the data above.\n\n"
+        "Do NOT use bullet points. Write flowing sentences. Do NOT give generic advice."
     )
     try:
         resp = _get_openai().chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},  # forces valid JSON output
+            response_format={"type": "json_object"},
             temperature=0.7,
-            max_tokens=300,
+            max_tokens=400,
         )
-        return json.loads(resp.choices[0].message.content)  # parse JSON response
+        return json.loads(resp.choices[0].message.content)
     except Exception as e:
         print(f"GPT suggestion error: {e}")
-        return {"community": None, "scientist": None}  # graceful fallback
+        return {"community": None, "scientist": None}
 
 
 # --- JSON API endpoint (for programmatic access) ---
@@ -508,16 +513,40 @@ def analyze():
     except (KeyError, ValueError):
         return jsonify({"error": "Invalid or missing coordinates"}), 400
 
-    data = run_analysis(lat, lon) # run the same analysis as the main results page but return all data as JSON instead of rendering a template
-    precip = data.get("precipitation") # fetch the precipitation data from the analysis results to include in the suggestions; this allows the GPT suggestions to reference the specific forecasted precipitation amounts
-    data["suggestions"] = get_suggestions( # generate GPT suggestions based on the analysis results
-        impact_score=data["impact_score"],
-        discharge_count=len(data["nearby_stormwater"]),
+    data = run_analysis(lat, lon)
+    precip = data.get("precipitation")
+    wq = data.get("water_quality")
+    traffic = data.get("traffic")
+    data["suggestions"] = get_suggestions(
+        danger_score=data["impact_score"],
+        water_quality_impairments=f"{wq['total_impairments']} impairments (rank {wq['max_rank']}/10)" if wq else "No data",
+        storm_drain_count=len(data["nearby_stormwater"]),
         road_density=f"{data['road_density']} km/km²" if data.get('road_density') else "unavailable",
-        water_quality=data.get("water_quality"),
-        precip_forecast=f"{precip['total_inches']} inches over 3 days" if precip else "unavailable",
+        ehd_rank=traffic["ehd_rank"] if traffic else "No data",
+        impervious_surface_pct=data.get("impervious_pct", 0),
+        precipitation_forecast=f"{precip['total_inches']} inches over 3 days" if precip else "unavailable",
     )
-    return jsonify(data) 
+    return jsonify(data)
+
+
+# --- suggestions endpoint (async fetch from frontend) ---
+@app.route("/suggestions", methods=["POST"])
+def suggestions_endpoint():
+    try:
+        data = request.get_json()
+        result = get_suggestions(
+            danger_score=data.get("danger_score", 0),
+            water_quality_impairments=data.get("water_quality_impairments", "No data"),
+            storm_drain_count=data.get("storm_drain_count", 0),
+            road_density=data.get("road_density", "unavailable"),
+            ehd_rank=data.get("ehd_rank", "No data"),
+            impervious_surface_pct=data.get("impervious_surface_pct", 0),
+            precipitation_forecast=data.get("precipitation_forecast", "unavailable"),
+        )
+        return jsonify(result)
+    except Exception as e:
+        print(f"Suggestions endpoint error: {e}")
+        return jsonify({"community": None, "scientist": None})
 
 
 # --- results page (the main user-facing page) ---
@@ -530,16 +559,9 @@ def results():
         return "Missing or invalid lat/lon", 400
 
     data = run_analysis(lat, lon)       # run spatial analysis
-    precip = data.get("precipitation")
-    data["suggestions"] = get_suggestions( # contrary to /analyze, we generate GPT suggestions here but we will pass them to the template for display on the results page instead of including them in a JSON API response
-        impact_score=data["impact_score"],
-        discharge_count=len(data["nearby_stormwater"]),
-        road_density=f"{data['road_density']} km/km²" if data.get('road_density') else "unavailable",
-        water_quality=data.get("water_quality"),
-        precip_forecast=f"{precip['total_inches']} inches over 3 days" if precip else "unavailable",
-    )
 
     # pass all data to the Jinja template as JSON strings
+    # suggestions are fetched async via /suggestions endpoint
     return render_template("results.html",
         lat=lat, lon=lon,
         streams_json=json.dumps(data["nearby_streams"]),
@@ -555,7 +577,6 @@ def results():
         road_density_value=data["road_density"],
         precipitation_json=json.dumps(data["precipitation"]),
         impervious_pct=data["impervious_pct"],
-        suggestions=data.get("suggestions", {})
     )
 
 # --- NLCD impervious surface tile endpoint ---
