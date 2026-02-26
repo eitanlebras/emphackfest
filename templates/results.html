@@ -7,7 +7,7 @@
     <a href="/" class="back-btn"><i class="fa-solid fa-arrow-left"></i> Back</a>
 
     <!-- score panel -->
-    <div class="results-panel">
+    <div class="results-panel{% if not nearest_stream_dist_km %} results-panel-{{ risk_color }}{% endif %}">
         {% if nearest_stream_dist_km %}
             <div class="score-label">Danger Score</div>
             <div class="score-na">N/A</div>
