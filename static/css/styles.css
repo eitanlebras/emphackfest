@@ -13,7 +13,12 @@
   --font-head:   'Montserrat', sans-serif;
   --transition:  0.15s ease;
   --content-max: 1060px;
+  --radius:      8px;
+  --shadow:      0 2px 12px rgba(0,0,0,0.08);
+  --shadow-hover: 0 4px 20px rgba(0,0,0,0.12);
 }
+
+html { scroll-behavior: smooth; }
 /* main things */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -35,7 +40,13 @@ a:hover { color: var(--accent-dark); }
 
 ul { list-style: none; }
 
-h1, h2, h3, h4 { font-family: var(--font-head); line-height: 1.25; }
+h1, h2, h3, h4 { font-family: var(--font-head); line-height: 1.25; text-wrap: balance; }
+
+/* custom scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--border); }
+::-webkit-scrollbar-thumb { background: var(--grey); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
 
 /* announcement bar */
 .announcement-bar {
@@ -141,6 +152,10 @@ footer label { color: var(--grey); }
   max-width: 720px;
   margin: 0 auto 80px;
   padding-top: 24px;
+  min-height: calc(100vh - 120px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .hero .main-text {
@@ -207,15 +222,15 @@ gmp-place-autocomplete::part(input) { width: 100%; }
 gmp-place-autocomplete::part(input) {
   padding: 14px 16px;
   font-size: 15px;
-  border: 1px solid var(--border);
+  border: none;
+  border-radius: var(--radius);
   background: #fff;
   color: var(--black);
-  transition: border-color 0.2s ease;
 }
 gmp-place-autocomplete::part(input):focus {
   outline: none;
   box-shadow: none;
-  border-color: var(--teal);
+  border: none;
 }
 gmp-place-autocomplete::part(input)::placeholder {
   color: #aaa;
@@ -259,6 +274,11 @@ gmp-place-autocomplete::part(listbox-row-focused) { background: #2a2a2a; }
   border-radius: 50px;
   white-space: nowrap;
   letter-spacing: 0.01em;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.stat-pill:hover {
+  background: #e4e1d9;
+  color: var(--black);
 }
 .stat-dot {
   font-size: 14px;
@@ -274,8 +294,8 @@ gmp-place-autocomplete::part(listbox-row-focused) { background: #2a2a2a; }
   justify-content: center;
   gap: 48px;
   max-width: var(--content-max);
-  margin: 0 auto 80px;
-  padding: 56px 24px;
+  margin: 0 auto;
+  padding: 80px 24px;
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   text-align: center;
@@ -290,7 +310,7 @@ gmp-place-autocomplete::part(listbox-row-focused) { background: #2a2a2a; }
   font-family: var(--font-head);
   font-size: 56px;
   font-weight: 900;
-  color: var(--black);
+  color: var(--accent);
   line-height: 1;
   letter-spacing: -0.03em;
   margin-bottom: 8px;
@@ -307,11 +327,11 @@ gmp-place-autocomplete::part(listbox-row-focused) { background: #2a2a2a; }
 /* ── impact section ── */
 section#impact {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 72px;
   max-width: var(--content-max);
-  margin: 0 auto 80px;
-  padding-top: 64px;
+  margin: 0 auto;
+  padding: 80px 24px;
   border-top: 1px solid var(--border);
 }
 
@@ -324,7 +344,7 @@ section#impact .right-part {
 }
 
 .main {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 900;
   color: var(--black);
   margin-bottom: 20px;
@@ -337,18 +357,24 @@ section#impact .right-part {
   color: var(--black);
   line-height: 1.8;
   margin-bottom: 18px;
-  max-width: 500px;
+  max-width: 65ch;
 }
 
 /* step card — salmon left border */
 .step-card {
   padding: 18px 20px;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
   background: #fff;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.step-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
 }
 .step-card i { font-size: 20px; color: var(--teal); margin-bottom: 8px; }
 .step-card h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
@@ -357,8 +383,8 @@ section#impact .right-part {
 /* how it works */
 #how-it-works {
   max-width: var(--content-max);
-  margin: 0 auto 80px;
-  padding-top: 64px;
+  margin: 0 auto;
+  padding: 80px 24px;
   border-top: 1px solid var(--border);
 }
 #how-it-works .main {
@@ -410,11 +436,11 @@ section#impact .right-part {
 /* ── meet the team ── */
 #team {
   max-width: var(--content-max);
-  margin: 0 auto 80px;
-  padding-top: 64px;
+  margin: 0 auto;
+  padding: 80px 24px;
   border-top: 1px solid var(--border);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 72px;
 }
 
@@ -428,7 +454,7 @@ section#impact .right-part {
 }
 
 #team h2 {
-  font-size: 36px;
+  font-size: 40px;
   font-weight: 900;
   letter-spacing: -0.02em;
   margin-bottom: 16px;
@@ -439,12 +465,13 @@ section#impact .right-part {
   font-size: 14px;
   color: var(--black);
   line-height: 1.8;
-  max-width: 460px;
+  max-width: 65ch;
 }
 .team-photo {
   width: 100%;
   display: block;
   border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 .team-photo-placeholder {
   width: 100%;
@@ -472,21 +499,24 @@ section#impact .right-part {
   font-weight: 600;
   padding: 9px 20px;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius);
   background: #fff;
   letter-spacing: 0.02em;
   margin-bottom: 28px;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 .back-btn:hover {
   background: var(--light-grey);
   color: var(--black);
+  box-shadow: var(--shadow);
 }
 
 .results-panel {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto 36px;
-  padding: 36px 24px 28px;
+  padding: 48px 24px 36px;
   border: 2px solid var(--black);
+  border-radius: var(--radius);
   background: #fff;
   text-align: center;
 }
@@ -499,13 +529,13 @@ section#impact .right-part {
   margin-bottom: 4px;
 }
 .results-panel .score-number {
-  font-size: 72px;
+  font-size: 96px;
   font-weight: 900;
   color: var(--black);
   font-family: var(--font-head);
   letter-spacing: -0.03em;
   line-height: 1;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 .results-panel .score-number span:last-child {
   font-size: 28px;
@@ -552,11 +582,12 @@ section#impact .right-part {
 /* custom alert thing */
 
 .no-rivers-alert {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto 20px;
   padding: 12px 20px;
   background: #fff8e1;
   border: 1px solid #e6b800;
+  border-radius: var(--radius);
   font-size: 13px;
   font-weight: 500;
   color: #664d03;
@@ -565,22 +596,29 @@ section#impact .right-part {
 /* map */
 #results-map {
   width: 100%;
-  max-width: 860px;
-  height: 460px;
+  max-width: var(--content-max);
+  height: 520px;
   margin: 0 auto 36px;
   display: block;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
 /* leaflet popup overrides */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.leaflet-popup {
+  animation: fadeInUp 0.25s ease-out;
+}
 .leaflet-popup-content-wrapper {
   padding: 0 !important;
-  border-radius: 8px !important;
+  border-radius: var(--radius) !important;
   background: #fff !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.12) !important;
+  box-shadow: var(--shadow) !important;
   border: 1px solid var(--border) !important;
 }
 .leaflet-popup-tip-container { display: none; }
@@ -591,6 +629,10 @@ section#impact .right-part {
   padding: 6px 8px !important;
 }
 .leaflet-popup-close-button:hover { color: var(--black) !important; }
+
+/* layer transitions */
+.leaflet-overlay-pane img { transition: opacity 0.4s ease; }
+.leaflet-overlay-pane svg path { transition: opacity 0.3s ease, fill-opacity 0.3s ease; }
 
 .popup-card { font-family: var(--font-body); min-width: 220px; }
 .popup-card h3 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: var(--black); }
@@ -603,8 +645,8 @@ section#impact .right-part {
   background: #fff;
   padding: 10px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   font-family: var(--font-body);
   font-size: 11px;
   line-height: 1.8;
@@ -620,8 +662,8 @@ section#impact .right-part {
   background: #fff;
   padding: 10px 14px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
   font-family: var(--font-body);
   font-size: 11px;
   line-height: 1.9;
@@ -637,15 +679,17 @@ section#impact .right-part {
 
 /* stats */
 #env-stats-section {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto 36px;
   padding-top: 8px;
 }
 
 #env-stats-section h3 {
-  font-size: 16px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--black);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--grey);
   margin-bottom: 14px;
 }
 
@@ -665,6 +709,10 @@ section#impact .right-part {
   background: #fff;
   padding: 20px 18px;
   border-top: 3px solid transparent;
+  transition: background 0.2s ease;
+}
+.env-card:hover {
+  background: #fafafa;
 }
 .env-card-label {
   font-size: 11px;
@@ -694,20 +742,29 @@ section#impact .right-part {
 
 /* stream survey panel */
 #stream-survey-section {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto 36px;
 }
 #stream-survey-section h3 {
-  font-size: 16px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--black);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--grey);
   margin-bottom: 14px;
 }
 .stream-card {
   background: #fff;
   border: 1px solid var(--border);
-  padding: 12px 16px;
-  margin-bottom: 6px;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 8px;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+.stream-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
 .stream-card-header {
   display: flex;
@@ -722,13 +779,15 @@ section#impact .right-part {
 
 /* AI suggestion cards */
 #suggestions-section {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto 36px;
 }
 #suggestions-section > h3 {
-  font-size: 16px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--black);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--grey);
   margin-bottom: 14px;
 }
 .suggestions-row {
@@ -742,10 +801,15 @@ section#impact .right-part {
 .suggestion-card {
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-  padding: 20px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 24px;
   border-left: 4px solid transparent;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.suggestion-card:hover {
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
 .suggestion-community { border-left-color: var(--accent); }
 .suggestion-scientist { border-left-color: var(--teal); }
@@ -791,7 +855,7 @@ section#impact .right-part {
 .skeleton-line {
   height: 12px;
   margin-bottom: 10px;
-  border-radius: 4px;
+  border-radius: 6px;
   background: linear-gradient(90deg, #eee 25%, #e0e0e0 50%, #eee 75%);
   background-size: 400px 100%;
   animation: shimmer 1.5s ease-in-out infinite;
@@ -801,25 +865,31 @@ section#impact .right-part {
 
 /* faq */
 #faq-section {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto;
   padding-top: 8px;
   padding-bottom: 60px;
 }
 #faq-section > h3 {
-  font-size: 16px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: var(--black);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--grey);
   margin-bottom: 14px;
 }
 
 .faq-item {
   border: 1px solid var(--border);
   border-left: 3px solid transparent;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   background: #fff;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: var(--radius);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.faq-item:hover {
+  box-shadow: var(--shadow);
 }
 .faq-item[open] {
   border-left-color: var(--teal);
@@ -875,7 +945,7 @@ section#impact .right-part {
 
 /* data attribution */
 .data-attribution {
-  max-width: 860px;
+  max-width: var(--content-max);
   margin: 0 auto;
   padding-bottom: 40px;
   font-size: 11px;

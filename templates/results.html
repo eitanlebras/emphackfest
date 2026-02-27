@@ -25,14 +25,16 @@
             var el = document.getElementById("score-counter");
             if (!el) return;
             var target = parseInt(el.getAttribute("data-target"), 10) || 0;
-            var current = 0;
-            var duration = 1200;
-            var stepTime = Math.max(Math.floor(duration / target), 16);
-            var timer = setInterval(function() {
-                current++;
-                el.textContent = current;
-                if (current >= target) clearInterval(timer);
-            }, stepTime);
+            var duration = 1500;
+            var start = null;
+            function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+            function step(timestamp) {
+                if (!start) start = timestamp;
+                var progress = Math.min((timestamp - start) / duration, 1);
+                el.textContent = Math.round(easeOutCubic(progress) * target);
+                if (progress < 1) requestAnimationFrame(step);
+            }
+            requestAnimationFrame(step);
         })();
     </script>
     {% endif %}
