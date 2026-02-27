@@ -520,6 +520,15 @@ section#impact .right-part {
   background: #fff;
   text-align: center;
 }
+.results-panel.results-panel-green {
+  background: #eaf8ee;
+}
+.results-panel.results-panel-yellow {
+  background: #fff8e8;
+}
+.results-panel.results-panel-red {
+  background: #fdecec;
+}
 .results-panel .score-label {
   font-size: 13px;
   font-weight: 600;
